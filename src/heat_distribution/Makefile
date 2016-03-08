@@ -10,8 +10,8 @@ all: clean
 
 debug: clean
 	mkdir ./bin
-	$(COMPILE) $(DEBUG) ./$(FILE).cpp -o ./bin/$(FILE)
+	$(COMPILE) $(DEBUG) -g ./$(FILE).cpp -o ./bin/$(FILE)
 
 clean:
-	rm -rf ./bin/heat_distribution
+	rm -rf ./bin
 
