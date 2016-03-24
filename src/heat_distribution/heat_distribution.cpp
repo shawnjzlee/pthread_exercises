@@ -13,17 +13,22 @@ using namespace std;
 struct thread_data
 {
     short thread_id;                    /* Stores thread_id */
-    short left;                         /* Contains left neighboring thread */
-    short right;                        /* Contains right neighboring thread */
-    double ** submatrix;                /* Dynamically created 2D array */
+    short l_thread;                     /* Contains left neighboring thread */
+    short r_thread;                     /* Contains right neighboring thread */
+    int l_bound;                        /* Contains the left-most column */
+    int r_bound;                        /* Contains the right-most column */
     
-    /* Stores the number of columns the thread owns. 
-       Potential use: Column distribution optimization */
-    int columns;                        
+    /* Variables to check for correctness */
+    int columns;                        /* Number of columns owned by thread. */
 };
 
 /* Global variable for thread data */
 // struct thread_data * thread_data_array;
+
+int thread_get_columns (struct thread_data * data)
+{
+    return data->r_bound - data->l_bound + 1;
+}
 
 void * update_matrix(void * threadarg)
 {
@@ -33,13 +38,19 @@ void * update_matrix(void * threadarg)
     
     data = (struct thread_data *) threadarg;
     tid = data->thread_id;
-    columns = data->columns;
+    data->columns = thread_get_columns(data);
     
-    printf("#%hi owns %i columns.\n", tid, columns);
+    printf("#%hi owns %i columns, with left at %i and right at %i.\n"
+           , tid, data->columns, data->l_bound, data->r_bound);
     
     pthread_exit(NULL);
 }
 
+/* This program passes in three arguments:
+    - input file
+    - output file
+    - number of threads
+   The program exits if the any of the arguments are missing */
 
 int main(int argc, char * argv[])
 {
@@ -50,12 +61,12 @@ int main(int argc, char * argv[])
     /* Main() thread attribute variables */
     int num_threads = 0, rc = 0, 
         cols_per_thread = 0, remaining_cols = 0,
-        left = 0, right = 0;
+        l_thread = 0, r_thread = 0;
         
     long tid;
     
     /* Interator variables */
-    int i = 0, j = 0, k = 0;
+    int i = 0, j = 0, k = 0, index = 0;
     
     /* Miscellaneous variables */
     // bool divisible = true;
@@ -76,7 +87,8 @@ int main(int argc, char * argv[])
        If number of arguments aren't met, return -1. */
     if(argc != 4)
     {
-        cout << "Not enough arguments, exit(-1).";
+        cout << "Not enough arguments. \n"
+             << "Requires [input file] [output file] [number of threads]. \n";
         return -1;
     }
 
@@ -99,7 +111,7 @@ int main(int argc, char * argv[])
     }
 
     num_threads = atoi(argv[3]);
-    
+
     /* Declare the thread_data array after number of threads is known.
        This array will be passed as thread arguments. */
     struct thread_data thread_data_array[num_threads];
@@ -109,83 +121,81 @@ int main(int argc, char * argv[])
              >> top_left >> top_right 
              >> bottom_left >> bottom_right 
              >> tolerance;
-    
-    /* Create the matrix with the received row and column variables */
-    double matrix[row][column];
-    
-    /* Partition the number of columns per thread. Remaining number of columns 
-       will go into the last thread. Note that columns may be uneven */
+
+    /* Partition the number of columns per thread. If there are too many
+       requested threads, set it to the number of columns. Remaining number 
+       of columns will be distributed evenly to the latter threads. */
+    if (num_threads > column)
+        num_threads = column;
     if (column % num_threads)
         remaining_cols = column % (num_threads);
     cols_per_thread = column / (num_threads);
     
-    cout << "Columns per thread: " << cols_per_thread << endl;
-    cout << "Remaining cols: " << remaining_cols << endl;
-    cout << "Number of threads: " << num_threads << endl;
-    cout << "Rows / Columns: " << row << " / " << column << endl;
-    
+    // cout << "Columns per thread (Ext + 1): " << cols_per_thread << endl;
+    // cout << "Remaining cols: " << remaining_cols << endl;
+    // cout << "Number of threads: " << num_threads << endl;
+    // cout << "Rows / Columns: " << row << " / " << column << endl << endl;
+
     /* Create the array of threads */
     pthread_t threads[num_threads];
     
-    /* Initialize threads with arguments passed into the threads */
-    for(; i < num_threads; i++)
+    /* A column distribution algorithm that does not require MPI for threads
+       to communicate. Reduces chance of threads to communicate 
+       unnecessarily. */
+       
+    /* Sets the columns for normal distribution of columns */
+    int normal_dist = column / num_threads;
+    int ext_dist = normal_dist + 1;
+    int num_norm_cols = (column - (column % num_threads));
+    int num_ext_cols = column - num_norm_cols;
+
+    for (; i < num_norm_cols, index < num_threads - remaining_cols; 
+           i += normal_dist, index++)
     {
-        cout << "In main: creating thread " << i << endl;
+        cout << "In main: creating thread " << index << endl;
         
         /* Parameters to include when creating threads.
            left and right are neighboring threads */
-        if (i == 0) left = 0;
-        else left = i - 1;
-        if (i == (num_threads - 1)) right = 0;
-        else right = i + 1;
+        if (index == 0) l_thread = 0;
+        else l_thread = index - 1;
+        if (index == (num_threads - 1)) r_thread = 0;
+        else r_thread = index + 1;
 
         /* Populating the struct */
-        thread_data_array[i].thread_id = i;
-        thread_data_array[i].left = left;
-        thread_data_array[i].right = right;
-        thread_data_array[i].submatrix = new double * [row];
-
-        /* If there are no remaining columns, distribute columns evenly with all
-           threads. Else, append the remaining columns to the last thread.
-           
-           After allocating the arrays into each row, initialize corner cells 
-           based off given data.
-           If iterator is 0 (in the first thread), then append the corner
-           cell values with temperatures passed in. 
-           Similarly, append the corner cell values in the last thread. */
-        if(i != num_threads - 1)
+        thread_data_array[index].thread_id = index;
+        thread_data_array[index].l_thread = l_thread;
+        thread_data_array[index].l_thread = r_thread;
+        thread_data_array[index].l_bound = i;
+        thread_data_array[index].r_bound = i + normal_dist - 1;
+        rc = pthread_create(&threads[index], NULL, 
+                            update_matrix, (void *) &thread_data_array[index]);
+        if(rc)
         {
-            for(j = 0; j < row; j++)
-                thread_data_array[i].submatrix[j] = new double[cols_per_thread];
-                
-            thread_data_array[i].columns = cols_per_thread;
-            thread_data_array[0].submatrix[0][0] = top_left;
-            thread_data_array[0].submatrix[row - 1][0] = bottom_left;
+            printf("Return code from pthread_create() is %d \n", rc);
+            exit(-1);
         }
-        else
-        {
-            if(!remaining_cols)
-            {
-                for(j = 0; j < row; j++)
-                    thread_data_array[i].submatrix[j] = new double[cols_per_thread];
-                
-                thread_data_array[i].columns = cols_per_thread;
-                thread_data_array[num_threads - 1].submatrix[0][cols_per_thread - 1] = top_right;
-                thread_data_array[num_threads - 1].submatrix[row - 1][cols_per_thread - 1] = bottom_right;
-            }
-            else
-            {
-                for(j = 0; j < row; j++)
-                    thread_data_array[i].submatrix[j] = new double[cols_per_thread + remaining_cols];
-                
-                thread_data_array[i].columns = cols_per_thread + remaining_cols;
-                thread_data_array[num_threads - 1].submatrix[0][cols_per_thread + remaining_cols - 1] = top_right;
-                thread_data_array[num_threads - 1].submatrix[row - 1][cols_per_thread + remaining_cols - 1] = bottom_right;
-            }
-        }
+    }
+    /* Sets columns for extended distribution of columns 
+       TODO: Reduce the number of iterators in the loop, if possible */
+    for (; j < num_ext_cols; i += ext_dist, j++, index++)
+    {
+        cout << "In main: creating thread " << index << endl;
         
-        rc = pthread_create(&threads[i], NULL, 
-                            update_matrix, (void *) &thread_data_array[i]);
+        /* Parameters to include when creating threads.
+           left and right are neighboring threads */
+        if (index == 0) l_thread = 0;
+        else l_thread = index - 1;
+        if (index == (num_threads - 1)) r_thread = 0;
+        else r_thread = index + 1;
+
+        /* Populating the struct */
+        thread_data_array[index].thread_id = index;
+        thread_data_array[index].l_thread = l_thread;
+        thread_data_array[index].l_thread = r_thread;
+        thread_data_array[index].l_bound = i;
+        thread_data_array[index].r_bound = i + ext_dist - 1;
+        rc = pthread_create(&threads[index], NULL, 
+                            update_matrix, (void *) &thread_data_array[index]);
         if(rc)
         {
             printf("Return code from pthread_create() is %d \n", rc);
