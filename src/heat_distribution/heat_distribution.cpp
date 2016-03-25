@@ -22,7 +22,8 @@ struct thread_data
     int columns;                        /* Number of columns owned by thread. */
 };
 
-/* Global variable for thread data */
+/* Globally accessible variables and mutex */
+pthread_mutex_t mutex_cell_update;
 // struct thread_data * thread_data_array;
 
 int thread_get_columns (struct thread_data * data)
@@ -122,6 +123,13 @@ int main(int argc, char * argv[])
              >> bottom_left >> bottom_right 
              >> tolerance;
 
+    /* Initialize the 2D array with the above initial values */
+    double matrix[row][column];
+    matrix[0][0] = top_left;
+    matrix[0][column - 1] = top_right;
+    matrix[row - 1][0] = bottom_left;
+    matrix[row - 1][column - 1] = bottom_right;
+
     /* Partition the number of columns per thread. If there are too many
        requested threads, set it to the number of columns. Remaining number 
        of columns will be distributed evenly to the latter threads. */
@@ -138,6 +146,12 @@ int main(int argc, char * argv[])
 
     /* Create the array of threads */
     pthread_t threads[num_threads];
+    /* Initialize the mutex */
+    pthread_mutex_init (&mutex_cell_update, NULL);
+    /* Initialize and set thread detached attribute */
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
     
     /* A column distribution algorithm that does not require MPI for threads
        to communicate. Reduces chance of threads to communicate 
@@ -167,7 +181,7 @@ int main(int argc, char * argv[])
         thread_data_array[index].l_thread = r_thread;
         thread_data_array[index].l_bound = i;
         thread_data_array[index].r_bound = i + normal_dist - 1;
-        rc = pthread_create(&threads[index], NULL, 
+        rc = pthread_create(&threads[index], &attr, 
                             update_matrix, (void *) &thread_data_array[index]);
         if(rc)
         {
@@ -194,7 +208,7 @@ int main(int argc, char * argv[])
         thread_data_array[index].l_thread = r_thread;
         thread_data_array[index].l_bound = i;
         thread_data_array[index].r_bound = i + ext_dist - 1;
-        rc = pthread_create(&threads[index], NULL, 
+        rc = pthread_create(&threads[index], &attr, 
                             update_matrix, (void *) &thread_data_array[index]);
         if(rc)
         {
@@ -204,5 +218,6 @@ int main(int argc, char * argv[])
     }
     
     /* Last thing that main() should do */
+    printf("main(): program completed. \n");
     pthread_exit(NULL);
 }
