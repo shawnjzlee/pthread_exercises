@@ -15,7 +15,7 @@ debug: clean
 	mkdir ./bin
 	cp -f ./input.txt $(BUILD_DIR)/input.txt
 	cp -f ./output.txt $(BUILD_DIR)/output.txt
-	$(COMPILE) $(DEBUG) -g ./$(FILE).cpp -o ./bin/$(FILE)
+	$(COMPILE) $(FLAGS) -g ./$(FILE).cpp -o ./bin/$(FILE)
 
 clean:
 	rm -rf ./bin
