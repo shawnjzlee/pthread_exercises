@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <chrono>
+#include <vector>
 #include <unistd.h>
 #include <pthread.h>
 #include "heat_distribution.h"
@@ -50,6 +51,8 @@ void output_matrix (double ** matrix, int row, int col)
     */
 void update_cell (struct thread_data * data)
 {
+    data->max_difference = 0;
+    
     double initial, diff;
     for (int i = 1; i < data->r_bound; i++)
     {
@@ -116,9 +119,6 @@ int main(int argc, char * argv[])
     /* Interator variables */
     int i = 0, j = 0, k = 0, index = 0;
     
-    /* Miscellaneous variables */
-    // bool divisible = true;
-    
     /* Main() matrix attributes */
     double top, right, bottom, left;
     int row , column  = 0;
@@ -160,10 +160,6 @@ int main(int argc, char * argv[])
 
     num_threads = atoi(argv[3]);
 
-    /* Declare the thread_data array after number of threads is known.
-       This array will be passed as thread arguments. */
-    struct thread_data thread_data_array[num_threads];
-    
     /* Get all matrix related variables from input file */
     instream >> row  >> column 
              >> top >> right 
@@ -183,9 +179,10 @@ int main(int argc, char * argv[])
         matrix[row - 1][i] = bottom;
     for (i = 0; i < row; i++)
         matrix[i][0] = left;
-
-    /* Create the array of threads */
-    pthread_t threads[num_threads];
+    
+    /* Create a vector of threads */
+    vector <pthread_t> threads (num_threads);
+        
     /* Initialize mutex and condition variable objects */
     pthread_mutex_init (&mutex_col_update, NULL);
     pthread_cond_init (&tolerance_threshold_cv, NULL);
@@ -197,7 +194,7 @@ int main(int argc, char * argv[])
     if (num_threads == 0)
     {
         cout << "In main: creating thread " << index << endl;
-        
+        struct thread_data data;
         /* Parameters to include when creating threads.
            left and right are neighboring threads */
         if (index == 0) l_thread = 0;
@@ -206,26 +203,28 @@ int main(int argc, char * argv[])
         else r_thread = index + 1;
 
         /* Populating the struct */
-        thread_data_array[index].thread_id = index;
-        thread_data_array[index].l_thread = 0;
-        thread_data_array[index].l_thread = 0;
-        thread_data_array[index].l_bound = 0;
-        thread_data_array[index].r_bound = column - 1;
-        thread_data_array[index].columns = column;
-        thread_data_array[index].rows = row;
-        rc = pthread_create(&threads[index], &attr, 
-                            update_matrix, (void *) &thread_data_array[index]);
-        if(rc)
-        {
-            printf("Return code from pthread_create() is %d \n", rc);
-            exit(-1);
-        }
+        data.thread_id = index;
+        data.l_thread = l_thread;
+        data.r_thread = r_thread;
+        data.l_bound = 0;
+        data.r_bound = column - 1;
+        data.columns = column;
+        data.rows = row;
+        
+        do {
+            update_cell (&data);
+        } while (data.max_difference > tolerance);
+        output_matrix(matrix, row, column);
     }
+    /* Partition the number of columns per thread. If there are too many
+       requested threads, set it to the number of columns. Remaining number 
+       of columns will be distributed evenly to the latter threads. */
     else
     {
-        /* Partition the number of columns per thread. If there are too many
-           requested threads, set it to the number of columns. Remaining number 
-           of columns will be distributed evenly to the latter threads. */
+        /* Declare the thread_data array after number of threads is known.
+           This array will be passed as thread arguments. */
+        struct thread_data thread_data_array[num_threads];   
+        
         if (num_threads > column)
             num_threads = column;
         if (column  % num_threads)
@@ -302,7 +301,7 @@ int main(int argc, char * argv[])
     }
     /* Free attribute and wait for the other threads */
     pthread_attr_destroy (&attr);
-    for (i = 0; i < num_threads; i++)
+    while (!threads.empty ())
     {
         rc = pthread_join (threads[i], &status);
         if(rc)
