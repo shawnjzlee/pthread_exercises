@@ -13,7 +13,9 @@
 
 using namespace std;
 
-//array[width * row + col] = value;  
+/* Macro that converts the index location of a 2D array to that of a
+   1D array. It takes in two inputs, X and Y, to calculate offsets from
+   the current location of j and i (iterators) */
 #define GET_INDEX(X,Y) (data->columns * (j + X) + (i + Y))
 
 /* Globally accessible variables, mutexes, and barriers */
@@ -44,14 +46,6 @@ void output_matrix (double * matrix, int row, int col)
    r_bound. Ensure that at the l_bound and r_bound, other threads are not
    accessing the same column(s). Use mutex_col_update to lock the left or
    right bounded column. */
-   
-/* Boundry cases:
-    1) Top Left
-    2) Bottom Left
-    3) Top Right
-    4) Bottom Right
-    5) Column boundries (will vary depending on column row)
-    */
 void update_cell (struct thread_data * data)
 {
     data->max_difference = 0;
@@ -98,6 +92,7 @@ void * update_matrix(void * threadarg)
            , tid, thread_get_columns(data), data->l_bound, data->r_bound);
     
     do {
+        /* TODO: Separate functions for read and write */
         update_cell (data);
     } while (data->max_difference > tolerance);
     
@@ -105,12 +100,6 @@ void * update_matrix(void * threadarg)
     
     pthread_exit(NULL);
 }
-
-/* This program passes in three arguments:
-    - input file
-    - output file
-    - number of threads
-   The program exits if the any of the arguments are missing */
 
 int main(int argc, char * argv[])
 {
@@ -175,7 +164,7 @@ int main(int argc, char * argv[])
              >> bottom >> left 
              >> tolerance;
 
-    /* Initialize the 2D array with the above initial values (H X W)*/
+    /* Initialize the 1D array with the above initial values (H X W)*/
     matrix = (double *)malloc (row * column * sizeof(double));
     const int matrix_size = row * column;
     
