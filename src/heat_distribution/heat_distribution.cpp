@@ -15,6 +15,7 @@ using namespace std;
 
 /* Globally accessible variables, mutexes, and barriers */
 double ** matrix;
+double * matrix_1d;
 double tolerance;
 pthread_mutex_t mutex_col_update;
 pthread_cond_t tolerance_threshold_cv;
@@ -37,7 +38,7 @@ void output_matrix (double ** matrix, int row, int col)
     return;
 }
 
-void output_matrix_1d (vector <double> matrix, int row, int col)
+void output_matrix_1d (double * matrix, int row, int col)
 {
     for (int i = 0; i < row; i++)
     {
@@ -180,8 +181,8 @@ int main(int argc, char * argv[])
              >> tolerance;
 
     /* Initialize the 2D array with the above initial values (H X W)*/
-    vector <double> matrix_1d (row*column, 0);
-    const int matrix_size = matrix_1d.size();
+    matrix_1d = (double *)malloc (row * column * sizeof(double));
+    const int matrix_size = row * column;
     
     for (i = 0; i < column; i++)
         matrix_1d[i] = top;
@@ -216,7 +217,7 @@ int main(int argc, char * argv[])
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
     
-    if (num_threads == 0)
+    if (!num_threads)
     {
         cout << "In main: creating thread " << index << endl;
         struct thread_data data;
