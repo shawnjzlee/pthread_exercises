@@ -37,6 +37,19 @@ void output_matrix (double ** matrix, int row, int col)
     return;
 }
 
+void output_matrix_1d (vector <double> matrix, int row, int col)
+{
+    for (int i = 0; i < row; i++)
+    {
+        for (int j = 0; j < col; j++)
+        {
+            cout << setprecision(4) << matrix[col * i + j] << " ";
+        }
+        cout << endl;
+    }
+    return;
+}
+
 /* TODO: Computation that updates each cell between the thread's l_bound and
    r_bound. Ensure that at the l_bound and r_bound, other threads are not
    accessing the same column(s). Use mutex_col_update to lock the left or
@@ -167,6 +180,18 @@ int main(int argc, char * argv[])
              >> tolerance;
 
     /* Initialize the 2D array with the above initial values (H X W)*/
+    vector <double> matrix_1d (row*column, 0);
+    const int matrix_size = matrix_1d.size();
+    
+    for (i = 0; i < column; i++)
+        matrix_1d[i] = top;
+    for (i = column - 1; i < matrix_size; i += column)
+        matrix_1d[i] = right;
+    for (i = (row * column) - column; i < matrix_size; i++)
+        matrix_1d[i] = bottom;
+    for (i = 0; i <= matrix_size - column; i += column)
+        matrix_1d[i] = left;
+    
     matrix = (double **)malloc (row * sizeof (double *));
     for(i = 0; i < row ; i++)
         matrix[i] = (double *)malloc (column * sizeof (double));
