@@ -13,9 +13,11 @@
 
 using namespace std;
 
+//array[width * row + col] = value;  
+#define GET_INDEX(X,Y) (data->columns * (j + X) + (i + Y))
+
 /* Globally accessible variables, mutexes, and barriers */
-double ** matrix;
-double * matrix_1d;
+double * matrix;
 double tolerance;
 pthread_mutex_t mutex_col_update;
 pthread_cond_t tolerance_threshold_cv;
@@ -25,20 +27,7 @@ int thread_get_columns (struct thread_data * data)
     return data->r_bound - data->l_bound + 1;
 }
 
-void output_matrix (double ** matrix, int row, int col)
-{
-    for (int i = 0; i < row; i++)
-    {
-        for (int j = 0; j < col; j++)
-        {
-            cout << setprecision(4) << matrix[i][j] << " ";
-        }
-        cout << endl;
-    }
-    return;
-}
-
-void output_matrix_1d (double * matrix, int row, int col)
+void output_matrix (double * matrix, int row, int col)
 {
     for (int i = 0; i < row; i++)
     {
@@ -68,6 +57,7 @@ void update_cell (struct thread_data * data)
     data->max_difference = 0;
     
     double initial, diff;
+    
     for (int i = 1; i < data->r_bound; i++)
     {
         for (int j = 1; j < data->rows - 1; j++)
@@ -76,12 +66,17 @@ void update_cell (struct thread_data * data)
             if(i == data->columns - 1)
                 break;
             
-            initial = matrix[j][i];
+            initial = matrix[GET_INDEX(0,0)];
+            // cout << (initial == temp) << endl;
             
-            matrix[j][i] = ((matrix[j-1][i] + matrix[j][i-1] + matrix[j][i+1] +
-                           matrix[j+1][i]) / 4.0);
             
-            diff = matrix[j][i] - initial;
+            //array[width * row + col] = value;
+            matrix[GET_INDEX(0,0)] = ((matrix[GET_INDEX(-1,0)] + 
+                                          matrix[GET_INDEX(0,-1)] + 
+                                          matrix[GET_INDEX(0,1)] + 
+                                          matrix[GET_INDEX(1,0)]) / 4.0);
+            
+            diff = matrix[GET_INDEX(0,0)] - initial;
             
             if (diff > data->max_difference)
             {
@@ -181,31 +176,18 @@ int main(int argc, char * argv[])
              >> tolerance;
 
     /* Initialize the 2D array with the above initial values (H X W)*/
-    matrix_1d = (double *)malloc (row * column * sizeof(double));
+    matrix = (double *)malloc (row * column * sizeof(double));
     const int matrix_size = row * column;
     
     for (i = 0; i < column; i++)
-        matrix_1d[i] = top;
+        matrix[i] = top;
     for (i = column - 1; i < matrix_size; i += column)
-        matrix_1d[i] = right;
+        matrix[i] = right;
     for (i = (row * column) - column; i < matrix_size; i++)
-        matrix_1d[i] = bottom;
+        matrix[i] = bottom;
     for (i = 0; i <= matrix_size - column; i += column)
-        matrix_1d[i] = left;
-    
-    matrix = (double **)malloc (row * sizeof (double *));
-    for(i = 0; i < row ; i++)
-        matrix[i] = (double *)malloc (column * sizeof (double));
-        
-    for (i = 0; i < column; i++)
-        matrix[0][i] = top;
-    for (i = 0; i < row; i++)
-        matrix[i][column - 1] = right;
-    for (i = 0; i < column; i++)
-        matrix[row - 1][i] = bottom;
-    for (i = 0; i < row; i++)
-        matrix[i][0] = left;
-    
+        matrix[i] = left;
+
     /* Create a vector of threads */
     vector <pthread_t> threads (num_threads);
         
@@ -333,11 +315,7 @@ int main(int argc, char * argv[])
         if(rc)
         {
             printf("Return code from pthread_join() is %d \n", rc);
-            
-            for (i = 0; i < row; ++i)
-                free (matrix[i]);
             free (matrix);
-            
             exit(-1);
         }
         printf ("main(): program completed with thread %ld having a status of %ld \n", i, (long)status);
@@ -345,10 +323,7 @@ int main(int argc, char * argv[])
     
     /* Last thing that main() should do */
     printf("main(): program completed. \n");
-    // output_matrix (matrix, row, column);
-    // for (i = 0; i < row; ++i)
-    //     free (matrix[i]);
-    // free (matrix);
+    free (matrix);
     pthread_mutex_destroy (&mutex_col_update);
     pthread_cond_destroy (&tolerance_threshold_cv);
     pthread_exit(NULL);
