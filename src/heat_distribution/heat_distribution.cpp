@@ -62,7 +62,7 @@ void update_cell (struct thread_data * data)
     
     double initial, diff;
     
-    for (int i = 1; i < data->rows - 1; i++)
+    for (int i = 1; i < data->flr; i++)
     {
         for (int j = 1; j < data->columns - 1; j++)
         {
