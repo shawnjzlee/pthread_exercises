@@ -11,8 +11,8 @@ struct thread_data
     short thread_id;                    /* Stores thread_id */
     short l_thread;                     /* Contains left neighboring thread */
     short r_thread;                     /* Contains right neighboring thread */
-    int l_bound;                        /* Contains the left-most column */
-    int r_bound;                        /* Contains the right-most column */
+    int ceiling;                        /* Contains the top-most row */
+    int flr;                            /* Contains the bottom-most row */
     
     /* Variables to check for correctness */
     int columns;                        /* Number of columns in matrix. */

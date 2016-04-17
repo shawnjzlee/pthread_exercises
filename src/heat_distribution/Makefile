@@ -23,7 +23,7 @@ clean:
 	rm -rf ./bin
 	
 check:
-	./heat_distribution input.txt output.txt 0
+	./heat_distribution input.txt output.txt ${ARGS}
 	
 check_d:
-	gdb --args ./heat_distribution input.txt output.txt 0
+	gdb --args ./heat_distribution input.txt output.txt ${ARGS}
