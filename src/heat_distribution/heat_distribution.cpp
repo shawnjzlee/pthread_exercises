@@ -21,7 +21,7 @@ using namespace std;
 /* Globally accessible variables, mutexes, and barriers */
 double * matrix;
 double tolerance;
-pthread_mutex_t mutex_col_update;
+pthread_mutex_t mutex_row_update;
 pthread_barrier_t barrier_threshold;
 
 int thread_get_columns (struct thread_data * data)
@@ -54,7 +54,7 @@ void output_matrix (double * matrix, int row, int col)
 
 /* TODO: Computation that updates each cell between the thread's ceiling and
    flr. Ensure that at the ceiling and flr, other threads are not
-   accessing the same column(s). Use mutex_col_update to lock the left or
+   accessing the same column(s). Use mutex_row_update to lock the left or
    right bounded column. */
 void update_cell (struct thread_data * data)
 {
@@ -66,20 +66,15 @@ void update_cell (struct thread_data * data)
     {
         for (int j = 1; j < data->columns - 1; j++)
         {
-            /* If loop is at the last column, stop calculations */
-            if(i == data->columns - 1)
-                break;
-            
             initial = matrix[GET_INDEX(0,0)];
-            // cout << (initial == temp) << endl;
-            
-            
-            //array[width * row + col] = value;
+
+            pthread_mutex_lock (&mutex_row_update);
             matrix[GET_INDEX(0,0)] = ((matrix[GET_INDEX(-1,0)] + 
                                           matrix[GET_INDEX(0,-1)] + 
                                           matrix[GET_INDEX(0,1)] + 
                                           matrix[GET_INDEX(1,0)]) / 4.0);
             
+            pthread_mutex_unlock (&mutex_row_update);
             diff = matrix[GET_INDEX(0,0)] - initial;
             
             if (diff > data->max_difference)
@@ -198,7 +193,7 @@ int main(int argc, char * argv[])
     struct thread_data thread_data_array[num_threads];  
         
     /* Initialize mutex and condition variable objects */
-    pthread_mutex_init (&mutex_col_update, NULL);
+    pthread_mutex_init (&mutex_row_update, NULL);
     pthread_barrier_init (&barrier_threshold, NULL, num_threads);
     /* Initialize and set thread detached attribute */
     pthread_attr_t attr;
@@ -339,7 +334,7 @@ int main(int argc, char * argv[])
     /* Last thing that main() should do */
     printf("main(): program completed. \n");
     free (matrix);
-    pthread_mutex_destroy (&mutex_col_update);
+    pthread_mutex_destroy (&mutex_row_update);
     pthread_barrier_destroy (&barrier_threshold);
     pthread_exit(NULL);
 }
