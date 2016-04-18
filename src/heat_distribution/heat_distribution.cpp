@@ -69,11 +69,11 @@ void update_cell (struct thread_data * data)
             initial = matrix[GET_INDEX(0,0)];
 
             pthread_mutex_lock (&mutex_row_update);
-            matrix[GET_INDEX(0,0)] = ((matrix[GET_INDEX(-1,0)] + 
-                                          matrix[GET_INDEX(0,-1)] + 
-                                          matrix[GET_INDEX(0,1)] + 
-                                          matrix[GET_INDEX(1,0)]) / 4.0);
-            
+            matrix[GET_INDEX(0,0)] = ((matrix[data->columns * (i - 1) + (j)] +
+                                       matrix[data->columns * (i) + (j - 1)] +
+                                       matrix[data->columns * (i) + (j + 1)] +
+                                       matrix[data->columns * (i + 1) + (j)]) / 4.0);
+                                       
             pthread_mutex_unlock (&mutex_row_update);
             diff = matrix[GET_INDEX(0,0)] - initial;
             
@@ -320,7 +320,6 @@ int main(int argc, char * argv[])
     pthread_attr_destroy (&attr);
     while (!threads.empty ())
     {
-        for(int itr = 0; itr < 90000000; itr++);
         rc = pthread_join (threads[i], &status);
         if(rc)
         {
