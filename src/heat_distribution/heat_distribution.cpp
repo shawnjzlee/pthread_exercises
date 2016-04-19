@@ -13,11 +13,6 @@
 
 using namespace std;
 
-/* Macro that converts the index location of a 2D array to that of a
-   1D array. It takes in two inputs, X and Y, to calculate offsets from
-   the current location of j and i (iterators) */
-#define GET_INDEX(X,Y) (data->columns * (i + X) + (j + Y))
-
 /* Globally accessible variables, mutexes, and barriers */
 double * matrix;
 double tolerance;
@@ -37,6 +32,8 @@ void output_array (double * matrix, int size)
         cout << matrix[i] << " ";
         i++;
     }
+    cout << endl;
+    return;
 }
 
 void output_matrix (double * matrix, int row, int col)
@@ -66,16 +63,15 @@ void update_cell (struct thread_data * data)
     {
         for (int j = 1; j < data->columns - 1; j++)
         {
-            initial = matrix[GET_INDEX(0,0)];
+            initial = matrix[data->columns * (i) + (j)];
 
-            pthread_mutex_lock (&mutex_row_update);
-            matrix[GET_INDEX(0,0)] = ((matrix[data->columns * (i - 1) + (j)] +
-                                       matrix[data->columns * (i) + (j - 1)] +
-                                       matrix[data->columns * (i) + (j + 1)] +
-                                       matrix[data->columns * (i + 1) + (j)]) / 4.0);
+            matrix[data->columns * (i) + (j)] = 
+                ((matrix[data->columns * (i - 1) + (j)] +
+                  matrix[data->columns * (i) + (j - 1)] +
+                  matrix[data->columns * (i) + (j + 1)] +
+                  matrix[data->columns * (i + 1) + (j)]) / 4.0);
                                        
-            pthread_mutex_unlock (&mutex_row_update);
-            diff = matrix[GET_INDEX(0,0)] - initial;
+            diff = matrix[data->columns * (i) + (j)] - initial;
             
             if (diff > data->max_difference)
             {
@@ -166,8 +162,11 @@ int main(int argc, char * argv[])
         cout << "Could not open file " << output_file << endl;
         return -1;
     }
-
-    num_threads = atoi(argv[3]);
+    
+    if(atoi(argv[3]) == 0)
+        num_threads = 1;
+    else
+        num_threads = atoi(argv[3]);
 
     /* Get all matrix related variables from input file */
     instream >> row >> column 
@@ -200,7 +199,7 @@ int main(int argc, char * argv[])
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
     
-    if (!num_threads)
+    if (num_threads == 1)
     {
         cout << "In main: creating thread " << index << endl;
         struct thread_data data;
@@ -257,6 +256,8 @@ int main(int argc, char * argv[])
         cout << "num_threads " << num_threads << "\t remaining_rows " << remaining_rows << endl;
         cout << "normal_dist " << normal_dist << "\t ext_dist " << ext_dist << endl;
         cout << "num_norm_rows " << num_norm_rows << "\t num_ext_rows " << num_ext_rows << endl;
+        
+        /* TODO: spawning 1 too many threads. Main() is currently not distributed correctly */
         
         for (i = 0; i < num_norm_rows, index < num_threads - remaining_rows; 
                i += normal_dist, index++)
@@ -316,24 +317,22 @@ int main(int argc, char * argv[])
             }
         }
     }
+    
     /* Free attribute and wait for the other threads */
-    pthread_attr_destroy (&attr);
-    while (!threads.empty ())
-    {
-        rc = pthread_join (threads[i], &status);
-        if(rc)
-        {
-            printf("Return code from pthread_join() is %d \n", rc);
-            free (matrix);
+    pthread_attr_destroy(&attr);
+    for(int t = 0; t < num_threads; t++) {
+        rc = pthread_join(threads[t], &status);
+        if (rc) {
+            printf("ERROR; return code from pthread_join() is %d\n", rc);
             exit(-1);
         }
-        printf ("main(): program completed with thread %ld having a status of %ld \n", i, (long)status);
     }
+
+    cout << "loop exited" << endl;
     
     /* Last thing that main() should do */
-    printf("main(): program completed. \n");
-    free (matrix);
     pthread_mutex_destroy (&mutex_row_update);
     pthread_barrier_destroy (&barrier_threshold);
+    free (matrix);
     pthread_exit(NULL);
 }
