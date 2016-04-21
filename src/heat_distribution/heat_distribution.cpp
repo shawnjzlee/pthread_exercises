@@ -93,7 +93,6 @@ void * update_matrix(void * threadarg)
            , tid, thread_get_columns(data), data->ceiling, data->flr);
     
     do {
-        /* TODO: Separate functions for read and write */
         update_cell (data);
         int rc = pthread_barrier_wait (&barrier_threshold);
         if (rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
@@ -188,7 +187,7 @@ int main(int argc, char * argv[])
         matrix[i] = left;
 
     /* Create a vector of threads */
-    vector <pthread_t> threads (num_threads);
+    pthread_t threads[num_threads];
     struct thread_data thread_data_array[num_threads];  
         
     /* Initialize mutex and condition variable objects */
@@ -199,136 +198,143 @@ int main(int argc, char * argv[])
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
     
-    if (num_threads == 1)
+    /* Declare the thread_data array after number of threads is known.
+       This array will be passed as thread arguments. */ 
+    
+    if (num_threads > row)
+        num_threads = row;
+    if (row  % num_threads)
+        remaining_rows = row  % (num_threads);
+    rows_per_thread = row / (num_threads);
+    
+    /* A row distribution algorithm that does not require MPI for threads
+       to communicate. Reduces chance of threads to communicate 
+       unnecessarily. */
+       
+    /* Sets the rows for normal distribution of rows */
+    int normal_dist = row / num_threads;
+    int ext_dist = normal_dist + 1;
+    int num_norm_rows = (row - (row % num_threads));
+    int num_ext_rows = row - num_norm_rows;
+
+    cout << "num_threads " << num_threads << "\t remaining_rows " << remaining_rows << endl;
+    cout << "normal_dist " << normal_dist << "\t ext_dist " << ext_dist << endl;
+    cout << "num_norm_rows " << num_norm_rows << "\t num_ext_rows " << num_ext_rows << endl;
+    
+    /* TODO: spawning 1 too many threads. Main() is currently not distributed correctly */
+    
+    /* This should always happen, distribution for main() */
+    cout << "In main: creating thread " << index << endl;
+    struct thread_data data;
+    /* Parameters to include when creating threads.
+       left and right are neighboring threads */
+    if (index == 0) l_thread = 0;
+    else l_thread = index - 1;
+    if (index == (num_threads - 1)) r_thread = 0;
+    else r_thread = index + 1;
+
+    /* Populating the struct */
+    thread_data_array[index].thread_id = index;
+    thread_data_array[index].l_thread = l_thread;
+    thread_data_array[index].r_thread = r_thread;
+    thread_data_array[index].ceiling = 0;
+    thread_data_array[index].flr = normal_dist - 1;
+    thread_data_array[index].columns = column;
+    thread_data_array[index].rows = row;
+    
+    // data.thread_id = index;
+    // data.l_thread = l_thread;
+    // data.r_thread = r_thread;
+    // data.ceiling = 0;
+    // data.flr = normal_dist - 1;
+    // data.columns = column;
+    // data.rows = row;
+    
+    printf("#%hi owns %i rows, with top at %i and bottom at %i.\n", 
+           index, thread_get_columns(&thread_data_array[index]), 
+           thread_data_array[index].ceiling, thread_data_array[index].flr);
+
+    cout << "Current thread_id: " << pthread_self();
+    do {
+        update_cell (&thread_data_array[index]);
+    } while (thread_data_array[index].max_difference > tolerance);
+    
+    index++;
+    
+    for (i = normal_dist; i < num_norm_rows, index < num_threads - remaining_rows; 
+           i += normal_dist, index++)
     {
         cout << "In main: creating thread " << index << endl;
-        struct thread_data data;
-        /* Parameters to include when creating threads.
-           left and right are neighboring threads */
+        cout << "First distribution\n";
+        
+        if (index == 0) l_thread = 0;
+        else l_thread = index - 1;
+        if (index == (num_threads - 1)) r_thread = 0;
+        else r_thread = index + 1;
+        
+        thread_data_array[index].thread_id = index;
+        thread_data_array[index].l_thread = l_thread;
+        thread_data_array[index].r_thread = r_thread;
+        thread_data_array[index].ceiling = i;
+        thread_data_array[index].flr = i + normal_dist - 1;
+        thread_data_array[index].columns = column;
+        thread_data_array[index].rows = row;
+        rc = pthread_create(&threads[index], &attr, 
+                            update_matrix, (void *) &thread_data_array[index]);
+        if(rc)
+        {
+            printf("Return code from pthread_create() is %d \n", rc);
+            exit(-1);
+        }
+    }
+    for (j = 0; j < num_ext_rows; i += ext_dist, j++, index++)
+    {
+        cout << "In main: creating thread " << index << endl;
+        cout << "Second distribution\n";
+        
         if (index == 0) l_thread = 0;
         else l_thread = index - 1;
         if (index == (num_threads - 1)) r_thread = 0;
         else r_thread = index + 1;
 
-        /* Populating the struct */
-        data.thread_id = index;
-        data.l_thread = l_thread;
-        data.r_thread = r_thread;
-        data.ceiling = 0;
-        data.flr = row - 1;
-        data.columns = column;
-        data.rows = row;
-        
-        do {
-            update_cell (&data);
-        } while (data.max_difference > tolerance);
-        
-        output_matrix(matrix, row, column);
-        
-        cout << endl;
-        
-        output_array(matrix, matrix_size);
-    }
-    /* Partition the number of columns per thread. If there are too many
-       requested threads, set it to the number of columns. Remaining number 
-       of columns will be distributed evenly to the latter threads. */
-    else
-    {
-        /* Declare the thread_data array after number of threads is known.
-           This array will be passed as thread arguments. */ 
-        
-        if (num_threads > row)
-            num_threads = row;
-        if (row  % num_threads)
-            remaining_rows = row  % (num_threads);
-        rows_per_thread = row / (num_threads);
-        
-        /* A row distribution algorithm that does not require MPI for threads
-           to communicate. Reduces chance of threads to communicate 
-           unnecessarily. */
-           
-        /* Sets the rows for normal distribution of rows */
-        int normal_dist = row / num_threads;
-        int ext_dist = normal_dist + 1;
-        int num_norm_rows = (row - (row % num_threads));
-        int num_ext_rows = row - num_norm_rows;
-    
-        cout << "num_threads " << num_threads << "\t remaining_rows " << remaining_rows << endl;
-        cout << "normal_dist " << normal_dist << "\t ext_dist " << ext_dist << endl;
-        cout << "num_norm_rows " << num_norm_rows << "\t num_ext_rows " << num_ext_rows << endl;
-        
-        /* TODO: spawning 1 too many threads. Main() is currently not distributed correctly */
-        
-        for (i = 0; i < num_norm_rows, index < num_threads - remaining_rows; 
-               i += normal_dist, index++)
+        thread_data_array[index].thread_id = index;
+        thread_data_array[index].l_thread = l_thread;
+        thread_data_array[index].r_thread = r_thread;
+        thread_data_array[index].ceiling = i;
+        thread_data_array[index].flr = i + ext_dist - 1;
+        thread_data_array[index].columns = column;
+        thread_data_array[index].rows = row;
+        rc = pthread_create(&threads[index], &attr, 
+                            update_matrix, (void *) &thread_data_array[index]);
+        if(rc)
         {
-            cout << "In main: creating thread " << index << endl;
-            
-            /* Parameters to include when creating threads.
-               left and right are neighboring threads */
-            if (index == 0) l_thread = 0;
-            else l_thread = index - 1;
-            if (index == (num_threads - 1)) r_thread = 0;
-            else r_thread = index + 1;
-    
-            /* Populating the struct */
-            thread_data_array[index].thread_id = index;
-            thread_data_array[index].l_thread = l_thread;
-            thread_data_array[index].r_thread = r_thread;
-            thread_data_array[index].ceiling = i;
-            thread_data_array[index].flr = i + normal_dist - 1;
-            thread_data_array[index].columns = column;
-            thread_data_array[index].rows = row;
-            rc = pthread_create(&threads[index], &attr, 
-                                update_matrix, (void *) &thread_data_array[index]);
-            if(rc)
-            {
-                printf("Return code from pthread_create() is %d \n", rc);
-                exit(-1);
-            }
-        }
-        /* Sets columns for extended distribution of columns 
-           TODO: Reduce the number of iterators in the loop, if possible */
-        for (j = 0; j < num_ext_rows; i += ext_dist, j++, index++)
-        {
-            cout << "In main: creating thread " << index << endl;
-            
-            /* Parameters to include when creating threads.
-               left and right are neighboring threads */
-            if (index == 0) l_thread = 0;
-            else l_thread = index - 1;
-            if (index == (num_threads - 1)) r_thread = 0;
-            else r_thread = index + 1;
-    
-            /* Populating the struct */
-            thread_data_array[index].thread_id = index;
-            thread_data_array[index].l_thread = l_thread;
-            thread_data_array[index].r_thread = r_thread;
-            thread_data_array[index].ceiling = i;
-            thread_data_array[index].flr = i + ext_dist - 1;
-            thread_data_array[index].columns = column;
-            thread_data_array[index].rows = row;
-            rc = pthread_create(&threads[index], &attr, 
-                                update_matrix, (void *) &thread_data_array[index]);
-            if(rc)
-            {
-                printf("Return code from pthread_create() is %d \n", rc);
-                exit(-1);
-            }
-        }
-    }
-    
-    /* Free attribute and wait for the other threads */
-    pthread_attr_destroy(&attr);
-    for(int t = 0; t < num_threads; t++) {
-        rc = pthread_join(threads[t], &status);
-        if (rc) {
-            printf("ERROR; return code from pthread_join() is %d\n", rc);
+            printf("Return code from pthread_create() is %d \n", rc);
             exit(-1);
         }
     }
-
-    cout << "loop exited" << endl;
+        
+    pthread_attr_destroy(&attr);
+    
+    if (num_threads > 1)
+    {
+        pthread_barrier_wait (&barrier_threshold);
+        
+        /* Free attribute and wait for the other threads */
+        /* JOIN IS BROKEN */
+        for(int t = 0; t < num_threads - 1; t++) {
+            cout << "loop " << t << endl;
+            rc = pthread_join(threads[t], &status);
+            if (rc) {
+                printf("Error: return code from pthread_join() is %d\n", rc);
+                exit(-1);
+            }
+            printf("Main: completed join with thread %ld having a status of %ld\n",t,(long)status);
+        }
+        
+        cout << "loop exited" << endl;
+    }
+    
+    output_matrix (matrix, row, column);
     
     /* Last thing that main() should do */
     pthread_mutex_destroy (&mutex_row_update);
