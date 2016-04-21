@@ -9,8 +9,8 @@
 struct thread_data
 {
     short thread_id;                    /* Stores thread_id */
-    short l_thread;                     /* Contains left neighboring thread */
-    short r_thread;                     /* Contains right neighboring thread */
+    short t_thread;                     /* Contains left neighboring thread */
+    short b_thread;                     /* Contains right neighboring thread */
     int ceiling;                        /* Contains the top-most row */
     int flr;                            /* Contains the bottom-most row */
     

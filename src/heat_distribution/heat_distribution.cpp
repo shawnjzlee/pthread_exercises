@@ -17,6 +17,7 @@ using namespace std;
 double * matrix;
 double tolerance;
 pthread_mutex_t mutex_row_update;
+pthread_mutex_t mutex_difference;
 pthread_barrier_t barrier_threshold;
 
 int thread_get_columns (struct thread_data * data)
@@ -75,7 +76,9 @@ void update_cell (struct thread_data * data)
             
             if (diff > data->max_difference)
             {
+                /*pthread_mutex_lock (&mutex_difference);*/
                 data->max_difference = diff;
+                /*pthread_mutex_unlock (&mutex_difference);*/
             }
         }
     }
@@ -91,6 +94,8 @@ void * update_matrix(void * threadarg)
     
     printf("#%hi owns %i rows, with top at %i and bottom at %i.\n"
            , tid, thread_get_columns(data), data->ceiling, data->flr);
+           
+    printf("#%hi has a neighbor at %i and at %i.\n", tid, data->t_thread, data->b_thread);
     
     do {
         update_cell (data);
@@ -101,10 +106,6 @@ void * update_matrix(void * threadarg)
             exit(-1);
         }
     } while (data->max_difference > tolerance);
-    
-    output_matrix (matrix, data->rows, data->columns);
-    
-    pthread_exit(NULL);
 }
 
 int main(int argc, char * argv[])
@@ -116,7 +117,7 @@ int main(int argc, char * argv[])
     /* Main() thread attribute variables */
     int num_threads = 0, rc = 0, 
         rows_per_thread = 0, remaining_rows = 0,
-        l_thread = 0, r_thread = 0;
+        t_thread = 0, b_thread = 0;
     void * status;
     long tid;
     
@@ -192,11 +193,15 @@ int main(int argc, char * argv[])
         
     /* Initialize mutex and condition variable objects */
     pthread_mutex_init (&mutex_row_update, NULL);
+    pthread_mutex_init (&mutex_difference, NULL);
+    
     pthread_barrier_init (&barrier_threshold, NULL, num_threads);
     /* Initialize and set thread detached attribute */
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+    long self = pthread_self();
     
     /* Declare the thread_data array after number of threads is known.
        This array will be passed as thread arguments. */ 
@@ -221,60 +226,20 @@ int main(int argc, char * argv[])
     cout << "normal_dist " << normal_dist << "\t ext_dist " << ext_dist << endl;
     cout << "num_norm_rows " << num_norm_rows << "\t num_ext_rows " << num_ext_rows << endl;
     
-    /* TODO: spawning 1 too many threads. Main() is currently not distributed correctly */
-    
-    /* This should always happen, distribution for main() */
-    cout << "In main: creating thread " << index << endl;
-    struct thread_data data;
-    /* Parameters to include when creating threads.
-       left and right are neighboring threads */
-    if (index == 0) l_thread = 0;
-    else l_thread = index - 1;
-    if (index == (num_threads - 1)) r_thread = 0;
-    else r_thread = index + 1;
-
-    /* Populating the struct */
-    thread_data_array[index].thread_id = index;
-    thread_data_array[index].l_thread = l_thread;
-    thread_data_array[index].r_thread = r_thread;
-    thread_data_array[index].ceiling = 0;
-    thread_data_array[index].flr = normal_dist - 1;
-    thread_data_array[index].columns = column;
-    thread_data_array[index].rows = row;
-    
-    // data.thread_id = index;
-    // data.l_thread = l_thread;
-    // data.r_thread = r_thread;
-    // data.ceiling = 0;
-    // data.flr = normal_dist - 1;
-    // data.columns = column;
-    // data.rows = row;
-    
-    printf("#%hi owns %i rows, with top at %i and bottom at %i.\n", 
-           index, thread_get_columns(&thread_data_array[index]), 
-           thread_data_array[index].ceiling, thread_data_array[index].flr);
-
-    cout << "Current thread_id: " << pthread_self();
-    do {
-        update_cell (&thread_data_array[index]);
-    } while (thread_data_array[index].max_difference > tolerance);
-    
-    index++;
-    
-    for (i = normal_dist; i < num_norm_rows, index < num_threads - remaining_rows; 
+    for (i = 0; i < num_norm_rows, index < num_threads - remaining_rows - 1; 
            i += normal_dist, index++)
     {
         cout << "In main: creating thread " << index << endl;
         cout << "First distribution\n";
         
-        if (index == 0) l_thread = 0;
-        else l_thread = index - 1;
-        if (index == (num_threads - 1)) r_thread = 0;
-        else r_thread = index + 1;
+        if (index == 0) t_thread = -1;
+        else t_thread = index - 1;
+        if (index == (num_threads - 1)) b_thread = -1;
+        else b_thread = index + 1;
         
         thread_data_array[index].thread_id = index;
-        thread_data_array[index].l_thread = l_thread;
-        thread_data_array[index].r_thread = r_thread;
+        thread_data_array[index].t_thread = t_thread;
+        thread_data_array[index].b_thread = b_thread;
         thread_data_array[index].ceiling = i;
         thread_data_array[index].flr = i + normal_dist - 1;
         thread_data_array[index].columns = column;
@@ -292,14 +257,14 @@ int main(int argc, char * argv[])
         cout << "In main: creating thread " << index << endl;
         cout << "Second distribution\n";
         
-        if (index == 0) l_thread = 0;
-        else l_thread = index - 1;
-        if (index == (num_threads - 1)) r_thread = 0;
-        else r_thread = index + 1;
+        if (index == 0) t_thread = -1;
+        else t_thread = index - 1;
+        if (index == (num_threads - 1)) b_thread = -1;
+        else b_thread = index + 1;
 
         thread_data_array[index].thread_id = index;
-        thread_data_array[index].l_thread = l_thread;
-        thread_data_array[index].r_thread = r_thread;
+        thread_data_array[index].t_thread = t_thread;
+        thread_data_array[index].b_thread = b_thread;
         thread_data_array[index].ceiling = i;
         thread_data_array[index].flr = i + ext_dist - 1;
         thread_data_array[index].columns = column;
@@ -312,13 +277,35 @@ int main(int argc, char * argv[])
             exit(-1);
         }
     }
+
+    if(self == pthread_self())
+    {
+        /* This should always happen, distribution for main() */
+        cout << "In main: creating thread " << index << endl;
+        /* Parameters to include when creating threads.
+           left and right are neighboring threads */
+        if (index == 0) t_thread = -1;
+        else t_thread = index - 1;
+        if (index == (num_threads - 1)) b_thread = -1;
+        else b_thread = index + 1;
+    
+        /* Populating the struct */
+        thread_data_array[index].thread_id = index;
+        thread_data_array[index].t_thread = t_thread;
+        thread_data_array[index].b_thread = b_thread;
+        thread_data_array[index].ceiling = i;
+        thread_data_array[index].flr = i + normal_dist - 1;
+        thread_data_array[index].columns = column;
+        thread_data_array[index].rows = row;
         
+        update_matrix(&thread_data_array[index]);
+    }
+    
     pthread_attr_destroy(&attr);
     
     if (num_threads > 1)
     {
         pthread_barrier_wait (&barrier_threshold);
-        
         /* Free attribute and wait for the other threads */
         /* JOIN IS BROKEN */
         for(int t = 0; t < num_threads - 1; t++) {
@@ -338,6 +325,7 @@ int main(int argc, char * argv[])
     
     /* Last thing that main() should do */
     pthread_mutex_destroy (&mutex_row_update);
+    pthread_mutex_destroy (&mutex_difference);
     pthread_barrier_destroy (&barrier_threshold);
     free (matrix);
     pthread_exit(NULL);
