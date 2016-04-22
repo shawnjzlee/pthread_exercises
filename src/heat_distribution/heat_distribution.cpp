@@ -16,7 +16,8 @@ using namespace std;
 /* Globally accessible variables, mutexes, and barriers */
 double * matrix;
 double tolerance;
-pthread_mutex_t mutex_row_update;
+double max_difference;
+pthread_mutex_t * mutex_array;
 pthread_mutex_t mutex_difference;
 pthread_barrier_t barrier_threshold;
 
@@ -57,6 +58,7 @@ void output_matrix (double * matrix, int row, int col)
 void update_cell (struct thread_data * data)
 {
     data->max_difference = 0;
+    max_difference = 0;
     
     double initial, diff;
     
@@ -64,6 +66,10 @@ void update_cell (struct thread_data * data)
     {
         for (int j = 1; j < data->columns - 1; j++)
         {
+            pthread_mutex_lock (&mutex_array[i-1]);
+            pthread_mutex_lock (&mutex_array[i]);
+            pthread_mutex_lock (&mutex_array[i+1]);
+            
             initial = matrix[data->columns * (i) + (j)];
 
             matrix[data->columns * (i) + (j)] = 
@@ -80,7 +86,17 @@ void update_cell (struct thread_data * data)
                 data->max_difference = diff;
                 /*pthread_mutex_unlock (&mutex_difference);*/
             }
+
+            pthread_mutex_unlock (&mutex_array[i-1]);
+            pthread_mutex_unlock (&mutex_array[i]);
+            pthread_mutex_unlock (&mutex_array[i+1]);
         }
+    }
+    if (max_difference > data->max_difference)
+    {
+        pthread_mutex_lock (&mutex_difference);
+        max_difference = data->max_difference;
+        pthread_mutex_unlock (&mutex_difference);
     }
 }
 
@@ -92,10 +108,10 @@ void * update_matrix(void * threadarg)
     data = (struct thread_data *) threadarg;
     tid = data->thread_id;
     
-    printf("#%hi owns %i rows, with top at %i and bottom at %i.\n"
-           , tid, thread_get_columns(data), data->ceiling, data->flr);
+    // printf("#%hi owns %i rows, with top at %i and bottom at %i.\n"
+    //       , tid, thread_get_columns(data), data->ceiling, data->flr);
            
-    printf("#%hi has a neighbor at %i and at %i.\n", tid, data->t_thread, data->b_thread);
+    // printf("#%hi has a neighbor at %i and at %i.\n", tid, data->t_thread, data->b_thread);
     
     do {
         update_cell (data);
@@ -105,7 +121,7 @@ void * update_matrix(void * threadarg)
             cout << "Could not wait on barrier\n";
             exit(-1);
         }
-    } while (data->max_difference > tolerance);
+    } while (max_difference > tolerance);
 }
 
 int main(int argc, char * argv[])
@@ -153,7 +169,7 @@ int main(int argc, char * argv[])
         cout << "Could not open file " << input_file << endl;
         return -1;
     }
-
+    
     output_file = argv[2];
     
     /* Error checking: output file can be opened */
@@ -162,7 +178,7 @@ int main(int argc, char * argv[])
         cout << "Could not open file " << output_file << endl;
         return -1;
     }
-    
+
     if(atoi(argv[3]) == 0)
         num_threads = 1;
     else
@@ -188,11 +204,19 @@ int main(int argc, char * argv[])
         matrix[i] = left;
 
     /* Create a vector of threads */
+    if (num_threads > row)
+    {
+        num_threads = row;
+    }
     pthread_t threads[num_threads];
     struct thread_data thread_data_array[num_threads];  
         
     /* Initialize mutex and condition variable objects */
-    pthread_mutex_init (&mutex_row_update, NULL);
+    mutex_array = (pthread_mutex_t *)malloc (row * sizeof(pthread_mutex_t));
+    for (i = 0; i < row; i++)
+    {
+        pthread_mutex_init (&mutex_array[i], NULL);
+    }
     pthread_mutex_init (&mutex_difference, NULL);
     
     pthread_barrier_init (&barrier_threshold, NULL, num_threads);
@@ -201,7 +225,7 @@ int main(int argc, char * argv[])
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
-    long self = pthread_self();
+    // long self = pthread_self();
     
     /* Declare the thread_data array after number of threads is known.
        This array will be passed as thread arguments. */ 
@@ -222,15 +246,15 @@ int main(int argc, char * argv[])
     int num_norm_rows = (row - (row % num_threads));
     int num_ext_rows = row - num_norm_rows;
 
-    cout << "num_threads " << num_threads << "\t remaining_rows " << remaining_rows << endl;
-    cout << "normal_dist " << normal_dist << "\t ext_dist " << ext_dist << endl;
-    cout << "num_norm_rows " << num_norm_rows << "\t num_ext_rows " << num_ext_rows << endl;
+    // cout << "num_threads " << num_threads << "\t remaining_rows " << remaining_rows << endl;
+    // cout << "normal_dist " << normal_dist << "\t ext_dist " << ext_dist << endl;
+    // cout << "num_norm_rows " << num_norm_rows << "\t num_ext_rows " << num_ext_rows << endl;
     
     for (i = 0; i < num_norm_rows, index < num_threads - remaining_rows - 1; 
-           i += normal_dist, index++)
+         i += normal_dist, index++)
     {
-        cout << "In main: creating thread " << index << endl;
-        cout << "First distribution\n";
+        // cout << "In main: creating thread " << index << endl;
+        // cout << "First distribution\n";
         
         if (index == 0) t_thread = -1;
         else t_thread = index - 1;
@@ -254,8 +278,8 @@ int main(int argc, char * argv[])
     }
     for (j = 0; j < num_ext_rows; i += ext_dist, j++, index++)
     {
-        cout << "In main: creating thread " << index << endl;
-        cout << "Second distribution\n";
+        // cout << "In main: creating thread " << index << endl;
+        // cout << "Second distribution\n";
         
         if (index == 0) t_thread = -1;
         else t_thread = index - 1;
@@ -277,56 +301,45 @@ int main(int argc, char * argv[])
             exit(-1);
         }
     }
+    
+    /* This should always happen, distribution for main() */
+    //cout << "In main: creating thread " << index << endl;
+    /* Parameters to include when creating threads.
+       left and right are neighboring threads */
+    if (index == 0) t_thread = -1;
+    else t_thread = index - 1;
+    if (index == (num_threads - 1)) b_thread = -1;
+    else b_thread = index + 1;
 
-    if(self == pthread_self())
-    {
-        /* This should always happen, distribution for main() */
-        cout << "In main: creating thread " << index << endl;
-        /* Parameters to include when creating threads.
-           left and right are neighboring threads */
-        if (index == 0) t_thread = -1;
-        else t_thread = index - 1;
-        if (index == (num_threads - 1)) b_thread = -1;
-        else b_thread = index + 1;
+    /* Populating the struct */
+    thread_data_array[index].thread_id = index;
+    thread_data_array[index].t_thread = t_thread;
+    thread_data_array[index].b_thread = b_thread;
+    thread_data_array[index].ceiling = i;
+    thread_data_array[index].flr = i + normal_dist - 1;
+    thread_data_array[index].columns = column;
+    thread_data_array[index].rows = row;
     
-        /* Populating the struct */
-        thread_data_array[index].thread_id = index;
-        thread_data_array[index].t_thread = t_thread;
-        thread_data_array[index].b_thread = b_thread;
-        thread_data_array[index].ceiling = i;
-        thread_data_array[index].flr = i + normal_dist - 1;
-        thread_data_array[index].columns = column;
-        thread_data_array[index].rows = row;
-        
-        update_matrix(&thread_data_array[index]);
-    }
-    
-    pthread_attr_destroy(&attr);
+    update_matrix(&thread_data_array[index]);
     
     if (num_threads > 1)
     {
-        pthread_barrier_wait (&barrier_threshold);
         /* Free attribute and wait for the other threads */
-        /* JOIN IS BROKEN */
         for(int t = 0; t < num_threads - 1; t++) {
-            cout << "loop " << t << endl;
             rc = pthread_join(threads[t], &status);
             if (rc) {
                 printf("Error: return code from pthread_join() is %d\n", rc);
                 exit(-1);
             }
-            printf("Main: completed join with thread %ld having a status of %ld\n",t,(long)status);
         }
-        
-        cout << "loop exited" << endl;
     }
-    
-    output_matrix (matrix, row, column);
-    
+
+    output_matrix(matrix, row, column);
     /* Last thing that main() should do */
-    pthread_mutex_destroy (&mutex_row_update);
+    pthread_attr_destroy(&attr);
     pthread_mutex_destroy (&mutex_difference);
     pthread_barrier_destroy (&barrier_threshold);
+    free (mutex_array);
     free (matrix);
     pthread_exit(NULL);
 }
