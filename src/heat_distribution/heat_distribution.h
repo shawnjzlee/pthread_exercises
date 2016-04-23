@@ -21,10 +21,12 @@ struct thread_data
                                            thread bounds */
 };
 
-void update_cell (struct thread_data);
+void update_cell (struct thread_data *);
 void * update_matrix (void *);
 
 int thread_get_columns (struct thread_data);
 void output_matrix (double **, int, int);
+void output_array (double *, int);
+
 
 #endif /* heat_distribution.h */

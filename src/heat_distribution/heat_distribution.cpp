@@ -102,11 +102,11 @@ void update_cell (struct thread_data * data)
 
 void * update_matrix(void * threadarg)
 {
-    short tid = 0;
+    // short tid = 0;
     struct thread_data * data;
     
     data = (struct thread_data *) threadarg;
-    tid = data->thread_id;
+    // tid = data->thread_id;
     
     // printf("#%hi owns %i rows, with top at %i and bottom at %i.\n"
     //       , tid, thread_get_columns(data), data->ceiling, data->flr);
@@ -128,61 +128,40 @@ int main(int argc, char * argv[])
 {
     /* Create input and output streams to text files */
     ifstream instream;
-    ofstream outstream;
     
     /* Main() thread attribute variables */
     int num_threads = 0, rc = 0, 
         rows_per_thread = 0, remaining_rows = 0,
         t_thread = 0, b_thread = 0;
     void * status;
-    long tid;
     
     /* Interator variables */
-    int i = 0, j = 0, k = 0, index = 0;
+    int i = 0, j = 0, index = 0;
     
-    /* Main() matrix attributes */
     double top, right, bottom, left;
     int row , column;
 
-    /* Input file string */
     string input_file;
-    /* Output file string */
-    string output_file;
     
-    /* Error checking: number of arguments passed into main().
-           argv[1]: input_file name
-           argv[2]: output_file name
-           argv[3]: number of threads
-       If number of arguments aren't met, return -1. */
-    if(argc != 4)
+    if(argc != 3)
     {
         cout << "Not enough arguments. \n"
-             << "Requires [input file] [output file] [number of threads]. \n";
+             << "Requires [input file] [number of threads]. \n";
         return -1;
     }
 
     input_file = argv[1];
     
-    /* Error checking: input file can be opened */
     instream.open(input_file.c_str());
     if(!instream.is_open()){
         cout << "Could not open file " << input_file << endl;
         return -1;
     }
-    
-    output_file = argv[2];
-    
-    /* Error checking: output file can be opened */
-    outstream.open(output_file.c_str());
-    if(!outstream.is_open()){
-        cout << "Could not open file " << output_file << endl;
-        return -1;
-    }
 
-    if(atoi(argv[3]) == 0)
+    if(atoi(argv[2]) == 0)
         num_threads = 1;
     else
-        num_threads = atoi(argv[3]);
+        num_threads = atoi(argv[2]);
 
     /* Get all matrix related variables from input file */
     instream >> row >> column 
@@ -203,7 +182,6 @@ int main(int argc, char * argv[])
     for (i = 0; i <= matrix_size - column; i += column)
         matrix[i] = left;
 
-    /* Create a vector of threads */
     if (num_threads > row)
     {
         num_threads = row;
@@ -211,7 +189,6 @@ int main(int argc, char * argv[])
     pthread_t threads[num_threads];
     struct thread_data thread_data_array[num_threads];  
         
-    /* Initialize mutex and condition variable objects */
     mutex_array = (pthread_mutex_t *)malloc (row * sizeof(pthread_mutex_t));
     for (i = 0; i < row; i++)
     {
@@ -220,41 +197,24 @@ int main(int argc, char * argv[])
     pthread_mutex_init (&mutex_difference, NULL);
     
     pthread_barrier_init (&barrier_threshold, NULL, num_threads);
-    /* Initialize and set thread detached attribute */
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
-    // long self = pthread_self();
-    
-    /* Declare the thread_data array after number of threads is known.
-       This array will be passed as thread arguments. */ 
     
     if (num_threads > row)
         num_threads = row;
     if (row  % num_threads)
         remaining_rows = row  % (num_threads);
     rows_per_thread = row / (num_threads);
-    
-    /* A row distribution algorithm that does not require MPI for threads
-       to communicate. Reduces chance of threads to communicate 
-       unnecessarily. */
-       
-    /* Sets the rows for normal distribution of rows */
+
     int normal_dist = row / num_threads;
     int ext_dist = normal_dist + 1;
     int num_norm_rows = (row - (row % num_threads));
     int num_ext_rows = row - num_norm_rows;
-
-    // cout << "num_threads " << num_threads << "\t remaining_rows " << remaining_rows << endl;
-    // cout << "normal_dist " << normal_dist << "\t ext_dist " << ext_dist << endl;
-    // cout << "num_norm_rows " << num_norm_rows << "\t num_ext_rows " << num_ext_rows << endl;
     
     for (i = 0; i < num_norm_rows, index < num_threads - remaining_rows - 1; 
          i += normal_dist, index++)
     {
-        // cout << "In main: creating thread " << index << endl;
-        // cout << "First distribution\n";
         
         if (index == 0) t_thread = -1;
         else t_thread = index - 1;
@@ -278,9 +238,6 @@ int main(int argc, char * argv[])
     }
     for (j = 0; j < num_ext_rows; i += ext_dist, j++, index++)
     {
-        // cout << "In main: creating thread " << index << endl;
-        // cout << "Second distribution\n";
-        
         if (index == 0) t_thread = -1;
         else t_thread = index - 1;
         if (index == (num_threads - 1)) b_thread = -1;
@@ -302,10 +259,6 @@ int main(int argc, char * argv[])
         }
     }
     
-    /* This should always happen, distribution for main() */
-    //cout << "In main: creating thread " << index << endl;
-    /* Parameters to include when creating threads.
-       left and right are neighboring threads */
     if (index == 0) t_thread = -1;
     else t_thread = index - 1;
     if (index == (num_threads - 1)) b_thread = -1;
@@ -324,7 +277,6 @@ int main(int argc, char * argv[])
     
     if (num_threads > 1)
     {
-        /* Free attribute and wait for the other threads */
         for(int t = 0; t < num_threads - 1; t++) {
             rc = pthread_join(threads[t], &status);
             if (rc) {
@@ -335,7 +287,6 @@ int main(int argc, char * argv[])
     }
 
     output_matrix(matrix, row, column);
-    /* Last thing that main() should do */
     pthread_attr_destroy(&attr);
     pthread_mutex_destroy (&mutex_difference);
     pthread_barrier_destroy (&barrier_threshold);
