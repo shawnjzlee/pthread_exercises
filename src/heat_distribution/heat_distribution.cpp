@@ -51,10 +51,6 @@ void output_matrix (double * matrix, int row, int col)
     return;
 }
 
-/* TODO: Computation that updates each cell between the thread's ceiling and
-   flr. Ensure that at the ceiling and flr, other threads are not
-   accessing the same column(s). Use mutex_row_update to lock the left or
-   right bounded column. */
 void update_cell (struct thread_data * data)
 {
     data->max_difference = 0;
@@ -92,12 +88,12 @@ void update_cell (struct thread_data * data)
             pthread_mutex_unlock (&mutex_array[i+1]);
         }
     }
-    if (max_difference > data->max_difference)
+    pthread_mutex_lock (&mutex_difference);
+    if (max_difference < data->max_difference)
     {
-        pthread_mutex_lock (&mutex_difference);
         max_difference = data->max_difference;
-        pthread_mutex_unlock (&mutex_difference);
     }
+    pthread_mutex_unlock (&mutex_difference);
 }
 
 void * update_matrix(void * threadarg)
@@ -126,16 +122,13 @@ void * update_matrix(void * threadarg)
 
 int main(int argc, char * argv[])
 {
-    /* Create input and output streams to text files */
     ifstream instream;
     
-    /* Main() thread attribute variables */
     int num_threads = 0, rc = 0, 
         rows_per_thread = 0, remaining_rows = 0,
         t_thread = 0, b_thread = 0;
     void * status;
     
-    /* Interator variables */
     int i = 0, j = 0, index = 0;
     
     double top, right, bottom, left;
