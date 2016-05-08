@@ -17,6 +17,10 @@ Bugs/Known Issues/Limitations
 
 #### Heat Distribution
 
+- CHild threads exit before doing work because max_difference will always be smaller than the tolerance at the start.
+
+#### `r_barrier_wait ()`
+
 - None so far!
 
 Contributors
