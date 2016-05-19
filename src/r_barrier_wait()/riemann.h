@@ -9,11 +9,15 @@
 struct thread_data
 {
     short thread_id;                    /* Stores thread_id */
-    double global_lbound;               /* Stores global left bound */
-    double global_rbound;               /* Stores global right bound */
+    double lbound;                      /* Stores global left bound */
+    double rbound;                      /* Stores global right bound */
     
-    int curr_location;
-    int par;
+    double local_sum;                   /* Stores local sum */
+    int curr_location;                  /* Tracks the thread's current
+                                           working location */
+    int parts;                          /* Total number of partitions the thread
+                                           is working in */
+    int remaining_parts;                /* Number of partitions remaining */
 };
 
 #endif /* riemann.h */
