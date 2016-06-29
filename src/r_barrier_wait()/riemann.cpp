@@ -9,7 +9,7 @@
 #include <vector>
 #include <unistd.h>
 
-//#include "rbarrier.h"
+#include "rbarrier.h"
 #include "riemann.h"
 #include <pthread.h>
 
@@ -18,26 +18,26 @@ using namespace std;
 double total;
 double l_bound;
 double r_bound;
-int index;
 double width;
 int num_threads;
 
 struct thread_data * thread_data_array;
+short * thread_status;
 pthread_barrier_t barrier;
+pthread_barrier_t _barrier;
 
 #define STRINGIFY(Y) #Y
 #define OUTPUT(X) cout << STRINGIFY(X) << ": " << X << endl;
 
 double func (double x){ return x*x; }
 
-template <typename b_fn, typename v_fn>
-bool r_barrier_wait (pthread_barrier_t barr, const b_fn& condition,
-                     const v_fn& callback) {
-    bool result = condition ();
-    pthread_barrier_wait (&barr);
-    if (result) { callback (); }
-    else return result;
-    pthread_barrier_wait (&barr);
+void 
+barrier_rc (int rc) {
+    if (rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
+    {
+        cout << "Could not wait on barrier\n";
+        exit(-1);
+    }
 }
 
 /* Returns a double that calculates the total calculated from each thread.
@@ -56,15 +56,6 @@ thread_get_width (struct thread_data * data) {
     return data->rbound - data->lbound;
 }
 
-void 
-barrier_rc (int rc) {
-    if (rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
-    {
-        cout << "Could not wait on barrier\n";
-        exit(-1);
-    }
-}
-
 /* Passes in a thread argument from pthread_create(). This is the do_work 
    function that each thread works in. 
    Furthermore, lambda functions that allows r_barrier_wait() to check 
@@ -77,8 +68,8 @@ get_total (void * threadarg) {
     data = (struct thread_data *) threadarg;
     tid = data->thread_id;
     
-    // printf("#%hi is %f wide, with lbound at %f and rbound at %f.\n"
-    //       , tid, thread_get_width(data), data->lbound, data->rbound);
+    printf("#%hi is %f wide, with lbound at %f and rbound at %f.\n"
+          , tid, thread_get_width(data), data->lbound, data->rbound);
     
     /* In each thread, calculate the area of each part given the function on
       line 29. */
@@ -86,28 +77,58 @@ get_total (void * threadarg) {
         data->remaining_parts--;
         data->local_sum += func(data->lbound) * width;
         data->lbound += width;
+        data->curr_location += width;
     }
     
     printf("#%hi has a computed a sum of %f.\n", tid, data->local_sum);
-    // rc = r_barrier_wait(barrier,
-    //     [](void) {
-    //         for (index = 0; index < num_threads; index++)
-    //         {
-    //             if(thread_data_array[index].curr_location < (thread_data_array[index].parts / 2))
-    //                 return true;
-    //         }
-    //         return false;
-    //     } , 
-    //     [](void) {
-    //         for(index = (thread_data_array[index].parts / 2); index < thread_data_array[index].parts; index++){
-    //             thread_data_array[index].local_sum += func(l_bound) * width;
-    //             l_bound += width;
-    //         }
-    //     } );
+    
+    /* HLD:
+        1. Finished threads will pass through the condition() to check if other
+            threads need to have work done on
+        2. Finished threads will wait at the r_barrier_wait barrier
+        3. Finished threads will enter callback() to do work on other thread's work
+        4. All threads should wait at the barrier within r_barrier_wait
+        5. All work is completed, exit get_total()
         
-    // barrier_rc (rc);
-    // rc = pthread_barrier_wait (&barrier);
-    // barrier_rc (rc);
+        
+        Notes:
+        1. When I start execution, and provide a callback that processes
+           the second half of the execution
+        2. Work distribution amongst the thread and the thread's current location (data struct)
+        3. Abstract base class (with one pure virtual function), inherit from it and implement
+           the methods it provides.
+           
+         1. Template definitions can't be in .cpp
+         2. Make rbarrier.hpp
+         3. Pass in the barrier as a constructor (since barrier is a member variable)
+    */
+    
+    int index = 0;
+    riemann.r_barrier_wait(barrier,
+        [&index](void)->bool {
+            for (index = 0; index < num_threads; index++)
+            {
+                if((thread_data_array[index].curr_location 
+                    < (thread_data_array[index].parts / 2)) 
+                    || thread_data_array[index].cond != 1)
+                {
+                    thread_data_array[index].cond = 1;
+                    thread_data_array[index].parts /= 2;
+                    return true;
+                }
+            }
+            return false;
+        } , 
+        [&index](void) {
+            thread_data_array[index].curr_location = (thread_data_array[index].parts / 2);
+            while(thread_data_array[index].curr_location != thread_data_array[index].rbound) {
+                thread_data_array[index].remaining_parts--;
+                thread_data_array[index].local_sum += func(thread_data_array[index].curr_location) * width;
+                thread_data_array[index].curr_location += width;
+            }
+        } );
+        
+    pthread_barrier_wait(&_barrier);
 }
 
 int 
@@ -116,7 +137,7 @@ main(int argc, char * argv[])
    ifstream instream;
    
    int rc = 0, part_sz, l_bound, r_bound,
-       remaining_parts = 0, i = 0, j = 0;
+       remaining_parts = 0, i = 0, j = 0, index = 0;
     
     string input_file;
     
@@ -147,10 +168,14 @@ main(int argc, char * argv[])
     if (num_threads > part_sz)
         num_threads = part_sz;
     
+    rbarrier riemann(num_threads);
+    
     pthread_t threads[num_threads];
+    thread_status = (short *)malloc(num_threads * sizeof(short));
     thread_data_array = (struct thread_data *)malloc(num_threads * sizeof(thread_data));
     
     pthread_barrier_init (&barrier, NULL, num_threads);
+    pthread_barrier_init (&_barrier, NULL, num_threads);
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
@@ -166,16 +191,18 @@ main(int argc, char * argv[])
     OUTPUT(l_bound); OUTPUT(r_bound); OUTPUT(normal_dist); OUTPUT(ext_dist);
     OUTPUT(num_norm_parts); OUTPUT(num_ext_parts); OUTPUT(width);
     OUTPUT (width * (double)normal_dist);
+    
     for (i = 0; i < num_norm_parts, index < num_threads - remaining_parts; 
          i += normal_dist, index++)
     {
         thread_data_array[index].thread_id = index;
         thread_data_array[index].lbound = l_bound + (width * normal_dist * index);
         thread_data_array[index].rbound = l_bound + (width * normal_dist * (index + 1));
-        thread_data_array[index].curr_location = 0;
+        thread_data_array[index].curr_location = l_bound + (width * normal_dist * index);
         thread_data_array[index].parts = normal_dist;
         thread_data_array[index].remaining_parts = normal_dist;
-        rc = pthread_create(&threads[index], &attr, 
+        thread_data_array[index].cond = 0;
+        rc = pthread_create(&threads[index], NULL, 
                             get_total, (void *) &thread_data_array[index]);
         if(rc)
         {
@@ -188,10 +215,11 @@ main(int argc, char * argv[])
         thread_data_array[index].thread_id = index;
         thread_data_array[index].lbound = l_bound + (width * ext_dist * index);
         thread_data_array[index].rbound = l_bound + (width * ext_dist * (index + 1));
-        thread_data_array[index].curr_location = 0;
+        thread_data_array[index].curr_location = l_bound + (width * normal_dist * index);
         thread_data_array[index].parts = ext_dist;
         thread_data_array[index].remaining_parts = ext_dist;
-        rc = pthread_create(&threads[index], &attr, 
+        thread_data_array[index].cond = 0;
+        rc = pthread_create(&threads[index], NULL, 
                             get_total, (void *) &thread_data_array[index]);
         if(rc)
         {
@@ -199,25 +227,22 @@ main(int argc, char * argv[])
             exit(-1);
         }
     }
-    
-    //main thread computes total sum
-    
-    
-    if (num_threads > 1)
-    {
-        void * status = 0;
-        for(int t = 0; t < num_threads - 1; t++) {
-            rc = pthread_join(threads[t], &status);
-            if (rc) {
-                printf("Error: return code from pthread_join() is %d\n", rc);
-                exit(-1);
-            }
+
+    void * status = 0;
+    for(int t = 0; t < num_threads - 1; t++) {
+        rc = pthread_join(threads[t], &status);
+        if (rc) {
+            printf("Error: return code from pthread_join() is %d\n", rc);
+            exit(-1);
         }
     }
+        
     get_total(thread_data_array);
     // cout << "The integral is: " << total << endl;
     pthread_attr_destroy(&attr);
     pthread_barrier_destroy (&barrier);
+    pthread_barrier_destroy (&_barrier);
+    free (thread_status);
     free (thread_data_array);
     pthread_exit(NULL);
 }

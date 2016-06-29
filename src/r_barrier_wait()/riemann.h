@@ -18,6 +18,17 @@ struct thread_data
     int parts;                          /* Total number of partitions the thread
                                            is working in */
     int remaining_parts;                /* Number of partitions remaining */
+    
+    bool cond;                          /* Flags the condition of the thread */
+    
+    bool get_sharing_condition();
+
+    bool call_back();
+    
 };
+
+bool get_sharing_condition();
+
+bool call_back();
 
 #endif /* riemann.h */
