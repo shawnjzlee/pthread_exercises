@@ -21,6 +21,9 @@ double r_bound;
 double width;
 int num_threads;
 
+thread_data * data;
+rbarrier rbarrier;
+
 struct thread_data * thread_data_array;
 short * thread_status;
 pthread_barrier_t barrier;
@@ -104,7 +107,7 @@ get_total (void * threadarg) {
     */
     
     int index = 0;
-    riemann.r_barrier_wait(barrier,
+    rbarrier.rbarrier_wait(barrier,
         [&index](void)->bool {
             for (index = 0; index < num_threads; index++)
             {
@@ -168,7 +171,7 @@ main(int argc, char * argv[])
     if (num_threads > part_sz)
         num_threads = part_sz;
     
-    rbarrier riemann(num_threads);
+    rbarrier.rbarrier_init(num_threads);
     
     pthread_t threads[num_threads];
     thread_status = (short *)malloc(num_threads * sizeof(short));

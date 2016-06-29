@@ -9,27 +9,30 @@ using namespace std;
 class rbarrier
 {
     public:
-        rbarrier(); // default constructor'
+        rbarrier();
         rbarrier(int num_threads);
-        ~rbarrier(); // destructor
+        ~rbarrier();
 
         template <typename b_fn, typename v_fn>
-        bool r_barrier_wait(pthread_barrier_t &barr,
+        bool rbarrier_wait(pthread_barrier_t &barr,
                             const b_fn& condition,
                             const v_fn& callback);
                             
+        int rbarrier_init(int num_threads);
+                            
     private:
         pthread_barrier_t barrier;
-        
 };
 
-rbarrier::rbarrier() {
-    // pthread_barrier_init needs a count > 0, how to init?
-}
+rbarrier::rbarrier() { }
 
 rbarrier::rbarrier(int num_threads) {
-    cout << "Constructed rbarrier class" << endl;
     pthread_barrier_init(&barrier, NULL, num_threads);
+}
+
+int rbarrier::rbarrier_init(int num_threads) {
+    int rc = pthread_barrier_init(&barrier, NULL, num_threads);
+    return rc;
 }
 
 rbarrier::~rbarrier() {
@@ -37,9 +40,9 @@ rbarrier::~rbarrier() {
 }
 
 template <typename b_fn, typename v_fn>
-bool rbarrier::r_barrier_wait (pthread_barrier_t &barr, 
-                               const b_fn& condition,
-                               const v_fn& callback) {
+bool rbarrier::rbarrier_wait (pthread_barrier_t &barr, 
+                              const b_fn& condition,
+                              const v_fn& callback) {
                          
     const bool result = condition ();
     
