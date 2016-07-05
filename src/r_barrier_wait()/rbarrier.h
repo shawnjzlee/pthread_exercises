@@ -14,9 +14,8 @@ class rbarrier
         ~rbarrier();
 
         template <typename b_fn, typename v_fn>
-        bool rbarrier_wait(pthread_barrier_t &barr,
-                            const b_fn& condition,
-                            const v_fn& callback);
+        bool rbarrier_wait(const b_fn& condition,
+                           const v_fn& callback);
                             
         int rbarrier_init(int num_threads);
                             
@@ -40,14 +39,13 @@ rbarrier::~rbarrier() {
 }
 
 template <typename b_fn, typename v_fn>
-bool rbarrier::rbarrier_wait (pthread_barrier_t &barr, 
-                              const b_fn& condition,
+bool rbarrier::rbarrier_wait (const b_fn& condition,
                               const v_fn& callback) {
                          
     const bool result = condition ();
     
     if (result) { callback (); }
-    pthread_barrier_wait (&barr);
+    pthread_barrier_wait (&barrier);
     
     return true;
 }

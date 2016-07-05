@@ -21,13 +21,13 @@ double r_bound;
 double width;
 int num_threads;
 
-thread_data * data;
+thread_data * thread_data_array;
 rbarrier rbarrier;
 
-struct thread_data * thread_data_array;
+// struct thread_data * thread_data_array;
 short * thread_status;
-pthread_barrier_t barrier;
-pthread_barrier_t _barrier;
+// pthread_barrier_t barrier;
+// pthread_barrier_t _barrier;
 
 #define STRINGIFY(Y) #Y
 #define OUTPUT(X) cout << STRINGIFY(X) << ": " << X << endl;
@@ -67,8 +67,8 @@ void *
 get_total (void * threadarg) {
     int rc = 0;
     short tid = 0;
-    struct thread_data * data;
-    data = (struct thread_data *) threadarg;
+    thread_data * data;
+    data = (thread_data *) threadarg;
     tid = data->thread_id;
     
     printf("#%hi is %f wide, with lbound at %f and rbound at %f.\n"
@@ -107,31 +107,14 @@ get_total (void * threadarg) {
     */
     
     int index = 0;
-    rbarrier.rbarrier_wait(barrier,
-        [&index](void)->bool {
-            for (index = 0; index < num_threads; index++)
-            {
-                if((thread_data_array[index].curr_location 
-                    < (thread_data_array[index].parts / 2)) 
-                    || thread_data_array[index].cond != 1)
-                {
-                    thread_data_array[index].cond = 1;
-                    thread_data_array[index].parts /= 2;
-                    return true;
-                }
-            }
-            return false;
+    rbarrier.rbarrier_wait(
+        [&index, data](void)->bool {
+            thread_data_array[index].get_sharing_condition(data, index);
         } , 
-        [&index](void) {
-            thread_data_array[index].curr_location = (thread_data_array[index].parts / 2);
-            while(thread_data_array[index].curr_location != thread_data_array[index].rbound) {
-                thread_data_array[index].remaining_parts--;
-                thread_data_array[index].local_sum += func(thread_data_array[index].curr_location) * width;
-                thread_data_array[index].curr_location += width;
-            }
+        [&index, data](void) {
+            thread_data_array[index].callback(data, index);
         } );
         
-    pthread_barrier_wait(&_barrier);
 }
 
 int 
@@ -175,10 +158,14 @@ main(int argc, char * argv[])
     
     pthread_t threads[num_threads];
     thread_status = (short *)malloc(num_threads * sizeof(short));
-    thread_data_array = (struct thread_data *)malloc(num_threads * sizeof(thread_data));
+    thread_data_array = (thread_data *)malloc(num_threads * sizeof(thread_data));
     
-    pthread_barrier_init (&barrier, NULL, num_threads);
-    pthread_barrier_init (&_barrier, NULL, num_threads);
+    for(int i = 0; i < num_threads; i++) {
+        thread_data_array[i].thread_data_init(num_threads);
+    }
+    
+    // pthread_barrier_init (&barrier, NULL, num_threads);
+    // pthread_barrier_init (&_barrier, NULL, num_threads);
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
@@ -243,8 +230,8 @@ main(int argc, char * argv[])
     get_total(thread_data_array);
     // cout << "The integral is: " << total << endl;
     pthread_attr_destroy(&attr);
-    pthread_barrier_destroy (&barrier);
-    pthread_barrier_destroy (&_barrier);
+    // pthread_barrier_destroy (&barrier);
+    // pthread_barrier_destroy (&_barrier);
     free (thread_status);
     free (thread_data_array);
     pthread_exit(NULL);
