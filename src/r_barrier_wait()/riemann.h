@@ -1,6 +1,7 @@
 #ifndef RIEMANN_H
 #define RIEMANN_H
 
+#include <unistd.h>
 #include "rbarrier.h"
 
 class thread_data {
@@ -11,10 +12,10 @@ class thread_data {
         void thread_data_init(int _num_threads);
         
         double func(double value);
-        bool get_sharing_condition(thread_data * data, int index);
-        void get_total(thread_data * data);
-        void callback(thread_data * data, int index);
-        void do_work(thread_data * data);
+        bool get_sharing_condition(thread_data * thread_data_array);
+        void get_total(thread_data * thread_data_array);
+        void callback(thread_data * thread_data_array);
+        void do_work();
     
         pthread_mutex_t get_sharing_mutex;
         pthread_mutex_t callback_mutex;
@@ -24,6 +25,10 @@ class thread_data {
         int num_threads;                    /* Stores the number of threads */
         double lbound;                      /* Stores global left bound */
         double rbound;                      /* Stores global right bound */
+        
+        int stolen_index;
+        int stolen_location;
+        int stolen_parts;
         
         double width;
         
@@ -57,43 +62,61 @@ double thread_data::func(double value) {
     return value * value;
 }
 
-bool thread_data::get_sharing_condition(thread_data * data, int index) {
-    pthread_mutex_lock(&get_sharing_mutex);
-    for (index = 0; index < num_threads; index++)
+bool thread_data::get_sharing_condition(thread_data * thread_data_array) {
+    for (stolen_index = 0; stolen_index < num_threads; stolen_index++)
     {
-        if((data[index].curr_location 
-            < (data[index].parts / 2)) 
-            || data[index].cond != 1)
+        if(stolen_index == thread_id) { continue; }
+        cout << "Stolen index: " << thread_id << ", " << stolen_index << endl;
+        pthread_mutex_lock(&thread_data_array[stolen_index].do_work_mutex);
+        cout << "Stolen index current location: " << stolen_index << " " << thread_data_array[stolen_index].curr_location << ", " << thread_data_array[stolen_index].parts << endl;
+        if((thread_data_array[stolen_index].curr_location < 
+           (thread_data_array[stolen_index].parts / 2)) 
+           && thread_data_array[stolen_index].cond != 1)
         {
-            data[index].cond = 1;
-            data[index].parts /= 2;
+            thread_data_array[stolen_index].cond = 1;
+            stolen_parts = thread_data_array[stolen_index].parts;
+            thread_data_array[stolen_index].parts /= 2;
+            stolen_location = thread_data_array[stolen_index].parts;
+            pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);
+            cout << thread_id << " exited with true" << endl;
             return true;
         }
+        pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);
     }
+    cout << thread_id << " exited with false" << endl;
     return false;
-    pthread_mutex_unlock(&get_sharing_mutex);
 }
 
-void thread_data::callback(thread_data * data, int index) {
-    pthread_mutex_lock(&callback_mutex);
-    data[index].curr_location = (data[index].parts / 2);
-    while(data[index].curr_location != data[index].rbound) {
-        data[index].remaining_parts--;
-        data[index].local_sum += func(data[index].curr_location) * width;
-        data[index].curr_location += width;
+void thread_data::callback(thread_data * thread_data_array) {
+    double sum = 0.0;
+    double local_lbound = thread_data_array[stolen_index].lbound + stolen_location * width; 
+    while(stolen_location != stolen_parts) {
+        pthread_mutex_lock(&thread_data_array[stolen_index].do_work_mutex);
+        thread_data_array[stolen_index].remaining_parts--;
+        sum += func(local_lbound) * width;
+        thread_data_array[stolen_index].local_sum += func(local_lbound) * width;
+        local_lbound += width;
+        stolen_location += 1;
+        pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);
     }
-    pthread_mutex_unlock(&callback_mutex);
+    cout << "Callback Local sum: " << stolen_index << " " << sum << endl;
 }
 
-void thread_data::do_work(thread_data * data) {
-    pthread_mutex_lock(&do_work_mutex);
-    for (int i = 0; i < data->parts; i++) {
-        data->remaining_parts--;
-        data->local_sum += func(data->lbound) * width;
-        data->lbound += width;
-        data->curr_location += width;
+void thread_data::do_work() {
+    //cout << width << endl;
+    double sum = 0.0;
+    double local_lbound = lbound; 
+    for (int i = 0; i < parts; i++) {
+        // if(thread_id == 0) usleep(1);
+        pthread_mutex_lock(&do_work_mutex);
+        remaining_parts--;
+        local_sum += func(local_lbound) * width;
+        sum += func(local_lbound) * width;
+        local_lbound += width;
+        curr_location = i;
+        pthread_mutex_unlock(&do_work_mutex);
     }
-    pthread_mutex_unlock(&do_work_mutex);
+    cout << "Do_work Local sum: " << thread_id << " " << sum << endl;
 }
 
 #endif /* riemann.h */

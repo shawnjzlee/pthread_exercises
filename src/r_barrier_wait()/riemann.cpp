@@ -65,6 +65,7 @@ thread_get_width (struct thread_data * data) {
    condition and do_work is defined and called here. */
 void * 
 get_total (void * threadarg) {
+    
     int rc = 0;
     short tid = 0;
     thread_data * data;
@@ -76,43 +77,16 @@ get_total (void * threadarg) {
     
     /* In each thread, calculate the area of each part given the function on
       line 29. */
-    for (int i = 0; i < data->parts; i++) {
-        data->remaining_parts--;
-        data->local_sum += func(data->lbound) * width;
-        data->lbound += width;
-        data->curr_location += width;
-    }
+    data->do_work();
     
     printf("#%hi has a computed a sum of %f.\n", tid, data->local_sum);
-    
-    /* HLD:
-        1. Finished threads will pass through the condition() to check if other
-            threads need to have work done on
-        2. Finished threads will wait at the r_barrier_wait barrier
-        3. Finished threads will enter callback() to do work on other thread's work
-        4. All threads should wait at the barrier within r_barrier_wait
-        5. All work is completed, exit get_total()
-        
-        
-        Notes:
-        1. When I start execution, and provide a callback that processes
-           the second half of the execution
-        2. Work distribution amongst the thread and the thread's current location (data struct)
-        3. Abstract base class (with one pure virtual function), inherit from it and implement
-           the methods it provides.
-           
-         1. Template definitions can't be in .cpp
-         2. Make rbarrier.hpp
-         3. Pass in the barrier as a constructor (since barrier is a member variable)
-    */
-    
-    int index = 0;
+
     rbarrier.rbarrier_wait(
-        [&index, data](void)->bool {
-            thread_data_array[index].get_sharing_condition(data, index);
+        [data](void)->bool {
+            data->get_sharing_condition(thread_data_array);
         } , 
-        [&index, data](void) {
-            thread_data_array[index].callback(data, index);
+        [data](void) {
+            data->callback(thread_data_array);
         } );
         
 }
@@ -188,10 +162,11 @@ main(int argc, char * argv[])
         thread_data_array[index].thread_id = index;
         thread_data_array[index].lbound = l_bound + (width * normal_dist * index);
         thread_data_array[index].rbound = l_bound + (width * normal_dist * (index + 1));
-        thread_data_array[index].curr_location = l_bound + (width * normal_dist * index);
+        thread_data_array[index].curr_location = 0;
         thread_data_array[index].parts = normal_dist;
         thread_data_array[index].remaining_parts = normal_dist;
         thread_data_array[index].cond = 0;
+        thread_data_array[index].width = width;
         rc = pthread_create(&threads[index], NULL, 
                             get_total, (void *) &thread_data_array[index]);
         if(rc)
@@ -205,10 +180,11 @@ main(int argc, char * argv[])
         thread_data_array[index].thread_id = index;
         thread_data_array[index].lbound = l_bound + (width * ext_dist * index);
         thread_data_array[index].rbound = l_bound + (width * ext_dist * (index + 1));
-        thread_data_array[index].curr_location = l_bound + (width * normal_dist * index);
+        thread_data_array[index].curr_location = 0;
         thread_data_array[index].parts = ext_dist;
         thread_data_array[index].remaining_parts = ext_dist;
         thread_data_array[index].cond = 0;
+        thread_data_array[index].width =width;
         rc = pthread_create(&threads[index], NULL, 
                             get_total, (void *) &thread_data_array[index]);
         if(rc)
