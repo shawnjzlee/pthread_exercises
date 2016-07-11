@@ -45,7 +45,6 @@ bool rbarrier::rbarrier_wait (const b_fn& condition,
     const bool result = condition ();
     
     if (result) { callback (); }
-    cout << "Entering pthread barrier" << endl;
     pthread_barrier_wait (&barrier);
     
     return true;

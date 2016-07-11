@@ -24,14 +24,6 @@ int num_threads;
 thread_data * thread_data_array;
 rbarrier rbarrier;
 
-// struct thread_data * thread_data_array;
-short * thread_status;
-// pthread_barrier_t barrier;
-// pthread_barrier_t _barrier;
-
-#define STRINGIFY(Y) #Y
-#define OUTPUT(X) cout << STRINGIFY(X) << ": " << X << endl;
-
 double func (double x){ return x*x; }
 
 void 
@@ -51,7 +43,7 @@ get_total (struct thread_data * thread_data_array) {
     for(int i = 0; i < num_threads; i++) {
         sum += thread_data_array[i].local_sum;
     }
-    cout << "The integral is: " << sum;
+    // cout << "The integral is: " << sum;
 }
 
 double 
@@ -65,30 +57,27 @@ thread_get_width (struct thread_data * data) {
    condition and do_work is defined and called here. */
 void * 
 get_total (void * threadarg) {
-    
-    int rc = 0;
     short tid = 0;
     thread_data * data;
     data = (thread_data *) threadarg;
     tid = data->thread_id;
     
-    printf("#%hi is %f wide, with lbound at %f and rbound at %f.\n"
-          , tid, thread_get_width(data), data->lbound, data->rbound);
+    // printf("#%hi is %f wide, with lbound at %f and rbound at %f.\n"
+    //       , tid, thread_get_width(data), data->lbound, data->rbound);
     
     /* In each thread, calculate the area of each part given the function on
       line 29. */
     data->do_work();
     
-    printf("#%hi has a computed a sum of %f.\n", tid, data->local_sum);
+    // printf("#%hi has a computed a sum of %f.\n", tid, data->local_sum);
 
     rbarrier.rbarrier_wait(
         [data](void)->bool {
-            data->get_sharing_condition(thread_data_array);
+            return data->get_sharing_condition(thread_data_array);
         } , 
         [data](void) {
             data->callback(thread_data_array);
         } );
-        
 }
 
 int 
@@ -128,10 +117,10 @@ main(int argc, char * argv[])
     if (num_threads > part_sz)
         num_threads = part_sz;
     
-    rbarrier.rbarrier_init(num_threads);
+    rc = rbarrier.rbarrier_init(num_threads);
+    barrier_rc(rc);
     
     pthread_t threads[num_threads];
-    thread_status = (short *)malloc(num_threads * sizeof(short));
     thread_data_array = (thread_data *)malloc(num_threads * sizeof(thread_data));
     
     for(int i = 0; i < num_threads; i++) {
@@ -147,51 +136,53 @@ main(int argc, char * argv[])
     if (part_sz  % num_threads)
         remaining_parts = part_sz  % (num_threads);
 
-    int normal_dist = part_sz / num_threads;
-    int ext_dist = normal_dist + 1;
+    double normal_dist = part_sz / num_threads;
+    double ext_dist = normal_dist + 1;
     int num_norm_parts = (part_sz - (part_sz % num_threads));
     int num_ext_parts = part_sz - num_norm_parts;
     
-    OUTPUT(l_bound); OUTPUT(r_bound); OUTPUT(normal_dist); OUTPUT(ext_dist);
-    OUTPUT(num_norm_parts); OUTPUT(num_ext_parts); OUTPUT(width);
-    OUTPUT (width * (double)normal_dist);
-    
-    for (i = 0; i < num_norm_parts, index < num_threads - remaining_parts; 
-         i += normal_dist, index++)
+    for (i = 0; i < num_norm_parts, index < num_threads - remaining_parts; index++)
     {
-        thread_data_array[index].thread_id = index;
-        thread_data_array[index].lbound = l_bound + (width * normal_dist * index);
-        thread_data_array[index].rbound = l_bound + (width * normal_dist * (index + 1));
-        thread_data_array[index].curr_location = 0;
-        thread_data_array[index].parts = normal_dist;
-        thread_data_array[index].remaining_parts = normal_dist;
-        thread_data_array[index].cond = 0;
-        thread_data_array[index].width = width;
-        rc = pthread_create(&threads[index], NULL, 
-                            get_total, (void *) &thread_data_array[index]);
-        if(rc)
-        {
-            printf("Return code from pthread_create() is %d \n", rc);
-            exit(-1);
+        if(num_ext_parts > 0 && i < num_ext_parts) {
+            thread_data_array[index].thread_id = index;
+            thread_data_array[index].lbound = l_bound + (width * ext_dist * index);
+            thread_data_array[index].rbound = l_bound + (width * ext_dist * (index + 1));
+            thread_data_array[index].curr_location = 0;
+            thread_data_array[index].parts = ext_dist;
+            thread_data_array[index].remaining_parts = ext_dist;
+            thread_data_array[index].cond = 0;
+            thread_data_array[index].width = width;
+            i += ext_dist;
+            rc = pthread_create(&threads[index], NULL, 
+                                get_total, (void *) &thread_data_array[index]);
+            if(rc)
+            {
+                printf("Return code from pthread_create() is %d \n", rc);
+                exit(-1);
+            }
+        }
+        else {
+            thread_data_array[index].thread_id = index;
+            thread_data_array[index].lbound = l_bound + (width * normal_dist * index);
+            thread_data_array[index].rbound = l_bound + (width * normal_dist * (index + 1));
+            thread_data_array[index].curr_location = 0;
+            thread_data_array[index].parts = normal_dist;
+            thread_data_array[index].remaining_parts = normal_dist;
+            thread_data_array[index].cond = 0;
+            thread_data_array[index].width = width;
+            i += normal_dist;
+            rc = pthread_create(&threads[index], NULL, 
+                                get_total, (void *) &thread_data_array[index]);
+            if(rc)
+            {
+                printf("Return code from pthread_create() is %d \n", rc);
+                exit(-1);
+            }
         }
     }
     for (j = 0; j < num_ext_parts; i += ext_dist, j++, index++)
     {
-        thread_data_array[index].thread_id = index;
-        thread_data_array[index].lbound = l_bound + (width * ext_dist * index);
-        thread_data_array[index].rbound = l_bound + (width * ext_dist * (index + 1));
-        thread_data_array[index].curr_location = 0;
-        thread_data_array[index].parts = ext_dist;
-        thread_data_array[index].remaining_parts = ext_dist;
-        thread_data_array[index].cond = 0;
-        thread_data_array[index].width =width;
-        rc = pthread_create(&threads[index], NULL, 
-                            get_total, (void *) &thread_data_array[index]);
-        if(rc)
-        {
-            printf("Return code from pthread_create() is %d \n", rc);
-            exit(-1);
-        }
+
     }
 
     void * status = 0;
@@ -204,11 +195,8 @@ main(int argc, char * argv[])
     }
         
     get_total(thread_data_array);
-    // cout << "The integral is: " << total << endl;
+    
     pthread_attr_destroy(&attr);
-    // pthread_barrier_destroy (&barrier);
-    // pthread_barrier_destroy (&_barrier);
-    free (thread_status);
     free (thread_data_array);
     pthread_exit(NULL);
 }

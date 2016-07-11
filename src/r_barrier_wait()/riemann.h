@@ -66,9 +66,7 @@ bool thread_data::get_sharing_condition(thread_data * thread_data_array) {
     for (stolen_index = 0; stolen_index < num_threads; stolen_index++)
     {
         if(stolen_index == thread_id) { continue; }
-        cout << "Stolen index: " << thread_id << ", " << stolen_index << endl;
         pthread_mutex_lock(&thread_data_array[stolen_index].do_work_mutex);
-        cout << "Stolen index current location: " << stolen_index << " " << thread_data_array[stolen_index].curr_location << ", " << thread_data_array[stolen_index].parts << endl;
         if((thread_data_array[stolen_index].curr_location < 
            (thread_data_array[stolen_index].parts / 2)) 
            && thread_data_array[stolen_index].cond != 1)
@@ -78,12 +76,10 @@ bool thread_data::get_sharing_condition(thread_data * thread_data_array) {
             thread_data_array[stolen_index].parts /= 2;
             stolen_location = thread_data_array[stolen_index].parts;
             pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);
-            cout << thread_id << " exited with true" << endl;
             return true;
         }
         pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);
     }
-    cout << thread_id << " exited with false" << endl;
     return false;
 }
 
@@ -99,11 +95,9 @@ void thread_data::callback(thread_data * thread_data_array) {
         stolen_location += 1;
         pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);
     }
-    cout << "Callback Local sum: " << stolen_index << " " << sum << endl;
 }
 
 void thread_data::do_work() {
-    //cout << width << endl;
     double sum = 0.0;
     double local_lbound = lbound; 
     for (int i = 0; i < parts; i++) {
@@ -116,7 +110,6 @@ void thread_data::do_work() {
         curr_location = i;
         pthread_mutex_unlock(&do_work_mutex);
     }
-    cout << "Do_work Local sum: " << thread_id << " " << sum << endl;
 }
 
 #endif /* riemann.h */
