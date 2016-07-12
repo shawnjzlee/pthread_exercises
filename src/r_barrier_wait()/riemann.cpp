@@ -8,6 +8,8 @@
 #include <chrono>
 #include <vector>
 #include <unistd.h>
+#include <cstdio>
+#include <ctime>
 
 #include "rbarrier.h"
 #include "riemann.h"
@@ -20,6 +22,9 @@ double l_bound;
 double r_bound;
 double width;
 int num_threads;
+
+clock_t start;
+double duration;
 
 thread_data * thread_data_array;
 rbarrier rbarrier;
@@ -43,7 +48,7 @@ get_total (struct thread_data * thread_data_array) {
     for(int i = 0; i < num_threads; i++) {
         sum += thread_data_array[i].local_sum;
     }
-    // cout << "The integral is: " << sum;
+    cout << "The integral is: " << sum;
 }
 
 double 
@@ -61,7 +66,8 @@ get_total (void * threadarg) {
     thread_data * data;
     data = (thread_data *) threadarg;
     tid = data->thread_id;
-    
+
+    if (tid == 0) start = clock();
     // printf("#%hi is %f wide, with lbound at %f and rbound at %f.\n"
     //       , tid, thread_get_width(data), data->lbound, data->rbound);
     
@@ -78,6 +84,8 @@ get_total (void * threadarg) {
         [data](void) {
             data->callback(thread_data_array);
         } );
+    
+
 }
 
 int 
@@ -180,10 +188,7 @@ main(int argc, char * argv[])
             }
         }
     }
-    for (j = 0; j < num_ext_parts; i += ext_dist, j++, index++)
-    {
 
-    }
 
     void * status = 0;
     for(int t = 0; t < num_threads - 1; t++) {
@@ -193,7 +198,10 @@ main(int argc, char * argv[])
             exit(-1);
         }
     }
-        
+
+    duration = (clock() - start) / (double) CLOCKS_PER_SEC;
+    cout << "Work Time: " << duration << endl;
+    
     get_total(thread_data_array);
     
     pthread_attr_destroy(&attr);

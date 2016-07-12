@@ -63,6 +63,7 @@ double thread_data::func(double value) {
 }
 
 bool thread_data::get_sharing_condition(thread_data * thread_data_array) {
+    return false;
     for (stolen_index = 0; stolen_index < num_threads; stolen_index++)
     {
         if(stolen_index == thread_id) { continue; }
