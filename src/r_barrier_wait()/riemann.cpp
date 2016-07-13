@@ -1,30 +1,23 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
 #include <iomanip>
 #include <chrono>
-#include <vector>
-#include <unistd.h>
-#include <cstdio>
 #include <ctime>
+#include <cstdio>
 
 #include "rbarrier.h"
 #include "riemann.h"
 #include <pthread.h>
 
 using namespace std;
+using namespace std::chrono;
 
 double total;
 double l_bound;
 double r_bound;
 double width;
 int num_threads;
-
-clock_t start;
-double duration;
 
 thread_data * thread_data_array;
 rbarrier rbarrier;
@@ -66,17 +59,15 @@ get_total (void * threadarg) {
     thread_data * data;
     data = (thread_data *) threadarg;
     tid = data->thread_id;
-
-    if (tid == 0) start = clock();
-    // printf("#%hi is %f wide, with lbound at %f and rbound at %f.\n"
-    //       , tid, thread_get_width(data), data->lbound, data->rbound);
+    
+    high_resolution_clock::time_point start;
+    if (tid == 0) 
+        start = high_resolution_clock::now();
     
     /* In each thread, calculate the area of each part given the function on
       line 29. */
     data->do_work();
     
-    // printf("#%hi has a computed a sum of %f.\n", tid, data->local_sum);
-
     rbarrier.rbarrier_wait(
         [data](void)->bool {
             return data->get_sharing_condition(thread_data_array);
@@ -84,8 +75,12 @@ get_total (void * threadarg) {
         [data](void) {
             data->callback(thread_data_array);
         } );
-    
 
+    if (tid == 0) {
+        high_resolution_clock::time_point end = high_resolution_clock::now();
+        duration<double> runtime = duration_cast<duration<double>>(end - start);
+        cout << "Work Time (in secs): " << runtime.count() << endl;
+    }
 }
 
 int 
@@ -151,6 +146,7 @@ main(int argc, char * argv[])
     
     for (i = 0; i < num_norm_parts, index < num_threads - remaining_parts; index++)
     {
+        // ternary / optimize
         if(num_ext_parts > 0 && i < num_ext_parts) {
             thread_data_array[index].thread_id = index;
             thread_data_array[index].lbound = l_bound + (width * ext_dist * index);
@@ -199,9 +195,6 @@ main(int argc, char * argv[])
         }
     }
 
-    duration = (clock() - start) / (double) CLOCKS_PER_SEC;
-    cout << "Work Time: " << duration << endl;
-    
     get_total(thread_data_array);
     
     pthread_attr_destroy(&attr);

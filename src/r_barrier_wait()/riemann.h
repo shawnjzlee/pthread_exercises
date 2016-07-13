@@ -16,9 +16,7 @@ class thread_data {
         void get_total(thread_data * thread_data_array);
         void callback(thread_data * thread_data_array);
         void do_work();
-    
-        pthread_mutex_t get_sharing_mutex;
-        pthread_mutex_t callback_mutex;
+        
         pthread_mutex_t do_work_mutex;
     
         short thread_id;                    /* Stores thread_id */
@@ -46,16 +44,12 @@ class thread_data {
 thread_data::thread_data() { }
 
 thread_data::~thread_data() {
-    pthread_mutex_destroy(&get_sharing_mutex);
-    pthread_mutex_destroy(&callback_mutex);
-    pthread_mutex_destroy(&callback_mutex);
+    pthread_mutex_destroy(&do_work_mutex);
 }
 
 void thread_data::thread_data_init(int _num_threads) {
     num_threads = _num_threads;
-    pthread_mutex_init(&get_sharing_mutex, NULL);
-    pthread_mutex_init(&callback_mutex, NULL);
-    pthread_mutex_init(&callback_mutex, NULL);
+    pthread_mutex_init(&do_work_mutex, NULL);
 }
 
 double thread_data::func(double value) {
@@ -63,7 +57,6 @@ double thread_data::func(double value) {
 }
 
 bool thread_data::get_sharing_condition(thread_data * thread_data_array) {
-    return false;
     for (stolen_index = 0; stolen_index < num_threads; stolen_index++)
     {
         if(stolen_index == thread_id) { continue; }
