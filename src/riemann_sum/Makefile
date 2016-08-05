@@ -20,7 +20,22 @@ clean:
 	rm -rf $(BUILD_DIR)
 	
 check:
-	./$(FILE) input.txt ${ARGS}
+	./$(FILE) input.txt ${ARGS} 1
 	
 check_d:
-	gdb --args ./$(FILE) input.txt ${ARGS}
+	gdb --args ./$(FILE) input.txt ${ARGS} 1
+
+
+n ?= 1
+check_r:
+	n=$(n); \
+	while [ $${n} -le ${ARGS} ] ; do \
+		echo $$n ; \
+		./$(FILE) input.txt $${n} 1; \
+		echo ; \
+		n=`expr $$n + 1`; \
+	done; \
+	true
+	
+check-nosharing:
+	./$(FILE) input.txt ${ARGS} 0

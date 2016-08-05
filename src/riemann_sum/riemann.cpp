@@ -93,10 +93,10 @@ main(int argc, char * argv[])
     
     string input_file;
     
-    if(argc != 3)
+    if(argc != 4)
     {
         cout << "Not enough arguments. \n"
-             << "Requires [input file] [number of threads]. \n";
+             << "Requires [input file] [number of threads] [sharing flag]. \n";
         return -1;
     }
 
@@ -112,6 +112,8 @@ main(int argc, char * argv[])
         num_threads = 1;
     else
         num_threads = atoi(argv[2]);
+        
+    bool share_flag = atoi(argv[3]);
     
     instream >> l_bound >> r_bound >> part_sz;
     
@@ -127,11 +129,9 @@ main(int argc, char * argv[])
     thread_data_array = (thread_data *)malloc(num_threads * sizeof(thread_data));
     
     for(int i = 0; i < num_threads; i++) {
-        thread_data_array[i].thread_data_init(num_threads);
+        thread_data_array[i].thread_data_init(num_threads, share_flag);
     }
     
-    // pthread_barrier_init (&barrier, NULL, num_threads);
-    // pthread_barrier_init (&_barrier, NULL, num_threads);
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
@@ -144,47 +144,41 @@ main(int argc, char * argv[])
     int num_norm_parts = (part_sz - (part_sz % num_threads));
     int num_ext_parts = part_sz - num_norm_parts;
     
-    for (i = 0; i < num_norm_parts, index < num_threads - remaining_parts; index++)
+    for (i = 0; i < num_norm_parts, index < num_threads - remaining_parts; 
+        i += normal_dist, index++)
     {
-        // ternary / optimize
-        if(num_ext_parts > 0 && i < num_ext_parts) {
-            thread_data_array[index].thread_id = index;
-            thread_data_array[index].lbound = l_bound + (width * ext_dist * index);
-            thread_data_array[index].rbound = l_bound + (width * ext_dist * (index + 1));
-            thread_data_array[index].curr_location = 0;
-            thread_data_array[index].parts = ext_dist;
-            thread_data_array[index].remaining_parts = ext_dist;
-            thread_data_array[index].cond = 0;
-            thread_data_array[index].width = width;
-            i += ext_dist;
-            rc = pthread_create(&threads[index], NULL, 
-                                get_total, (void *) &thread_data_array[index]);
-            if(rc)
-            {
-                printf("Return code from pthread_create() is %d \n", rc);
-                exit(-1);
-            }
-        }
-        else {
-            thread_data_array[index].thread_id = index;
-            thread_data_array[index].lbound = l_bound + (width * normal_dist * index);
-            thread_data_array[index].rbound = l_bound + (width * normal_dist * (index + 1));
-            thread_data_array[index].curr_location = 0;
-            thread_data_array[index].parts = normal_dist;
-            thread_data_array[index].remaining_parts = normal_dist;
-            thread_data_array[index].cond = 0;
-            thread_data_array[index].width = width;
-            i += normal_dist;
-            rc = pthread_create(&threads[index], NULL, 
-                                get_total, (void *) &thread_data_array[index]);
-            if(rc)
-            {
-                printf("Return code from pthread_create() is %d \n", rc);
-                exit(-1);
-            }
+        thread_data_array[index].thread_id = index;
+        thread_data_array[index].lbound = l_bound + (width * normal_dist * index);
+        thread_data_array[index].rbound = l_bound + (width * normal_dist * (index + 1));
+        thread_data_array[index].curr_location = l_bound + (width * normal_dist * index);
+        thread_data_array[index].parts = normal_dist;
+        thread_data_array[index].remaining_parts = normal_dist;
+        thread_data_array[index].cond = 0;
+        rc = pthread_create(&threads[index], NULL, 
+                            get_total, (void *) &thread_data_array[index]);
+        if(rc)
+        {
+            printf("Return code from pthread_create() is %d \n", rc);
+            exit(-1);
         }
     }
-
+    for (j = 0; j < num_ext_parts; i += ext_dist, j++, index++)
+    {
+        thread_data_array[index].thread_id = index;
+        thread_data_array[index].lbound = l_bound + (width * ext_dist * index);
+        thread_data_array[index].rbound = l_bound + (width * ext_dist * (index + 1));
+        thread_data_array[index].curr_location = l_bound + (width * normal_dist * index);
+        thread_data_array[index].parts = ext_dist;
+        thread_data_array[index].remaining_parts = ext_dist;
+        thread_data_array[index].cond = 0;
+        rc = pthread_create(&threads[index], NULL, 
+                            get_total, (void *) &thread_data_array[index]);
+        if(rc)
+        {
+            printf("Return code from pthread_create() is %d \n", rc);
+            exit(-1);
+        }
+    }
 
     void * status = 0;
     for(int t = 0; t < num_threads - 1; t++) {

@@ -9,7 +9,7 @@ class thread_data {
         thread_data();
         ~thread_data();
         
-        void thread_data_init(int _num_threads);
+        void thread_data_init(int _num_threads, bool enable_sharing);
         
         double func(double value);
         bool get_sharing_condition(thread_data * thread_data_array);
@@ -38,6 +38,7 @@ class thread_data {
         int remaining_parts;                /* Number of partitions remaining */
         
         bool cond;                          /* Flags the condition of the thread */
+        bool enable_sharing;                /* Passed in as cmd line argument; enables/disables sharing */
     
 };
 
@@ -47,7 +48,7 @@ thread_data::~thread_data() {
     pthread_mutex_destroy(&do_work_mutex);
 }
 
-void thread_data::thread_data_init(int _num_threads) {
+void thread_data::thread_data_init(int _num_threads, bool enable_sharing) {
     num_threads = _num_threads;
     pthread_mutex_init(&do_work_mutex, NULL);
 }
@@ -57,22 +58,25 @@ double thread_data::func(double value) {
 }
 
 bool thread_data::get_sharing_condition(thread_data * thread_data_array) {
-    for (stolen_index = 0; stolen_index < num_threads; stolen_index++)
-    {
-        if(stolen_index == thread_id) { continue; }
-        pthread_mutex_lock(&thread_data_array[stolen_index].do_work_mutex);
-        if((thread_data_array[stolen_index].curr_location < 
-           (thread_data_array[stolen_index].parts / 2)) 
-           && thread_data_array[stolen_index].cond != 1)
+    if(enable_sharing) {
+        for (stolen_index = 0; stolen_index < num_threads; stolen_index++)
         {
-            thread_data_array[stolen_index].cond = 1;
-            stolen_parts = thread_data_array[stolen_index].parts;
-            thread_data_array[stolen_index].parts /= 2;
-            stolen_location = thread_data_array[stolen_index].parts;
+            if(stolen_index == thread_id) { continue; }
+            pthread_mutex_lock(&thread_data_array[stolen_index].do_work_mutex);
+            if((thread_data_array[stolen_index].curr_location < 
+               (thread_data_array[stolen_index].parts / 2)) 
+               && thread_data_array[stolen_index].cond != 1)
+            {
+                thread_data_array[stolen_index].cond = 1;
+                stolen_parts = thread_data_array[stolen_index].parts;
+                thread_data_array[stolen_index].parts /= 2;
+                stolen_location = thread_data_array[stolen_index].parts;
+                pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);
+                return true;
+            }
             pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);
-            return true;
         }
-        pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);
+        return false;
     }
     return false;
 }
