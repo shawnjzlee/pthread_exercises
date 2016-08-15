@@ -144,9 +144,7 @@ main(int argc, char * argv[])
     int num_norm_parts = (part_sz - (part_sz % num_threads));
     int num_ext_parts = part_sz - num_norm_parts;
     
-    for (i = 0; i < num_norm_parts, index < num_threads - remaining_parts; 
-        i += normal_dist, index++)
-    {
+    if(num_threads == 1) {
         thread_data_array[index].thread_id = index;
         thread_data_array[index].lbound = l_bound + (width * normal_dist * index);
         thread_data_array[index].rbound = l_bound + (width * normal_dist * (index + 1));
@@ -156,31 +154,55 @@ main(int argc, char * argv[])
         thread_data_array[index].cond = 0;
         thread_data_array[index].local_sum = 0;
         thread_data_array[index].width = width;
-        rc = pthread_create(&threads[index], NULL, 
-                            get_total, (void *) &thread_data_array[index]);
-        if(rc)
-        {
-            printf("Return code from pthread_create() is %d \n", rc);
-            exit(-1);
-        }
+        
+        high_resolution_clock::time_point start;
+        start = high_resolution_clock::now();
+        
+        thread_data_array[index].do_work();
+        
+        high_resolution_clock::time_point end = high_resolution_clock::now();
+        duration<double> runtime = duration_cast<duration<double>>(end - start);
+        cout << "Work Time (in secs): " << runtime.count() << endl;
     }
-    for (j = 0; j < num_ext_parts; i += ext_dist, j++, index++)
-    {
-        thread_data_array[index].thread_id = index;
-        thread_data_array[index].lbound = l_bound + (width * ext_dist * index);
-        thread_data_array[index].rbound = l_bound + (width * ext_dist * (index + 1));
-        thread_data_array[index].curr_location = l_bound + (width * normal_dist * index);
-        thread_data_array[index].parts = ext_dist;
-        thread_data_array[index].remaining_parts = ext_dist;
-        thread_data_array[index].cond = 0;
-        thread_data_array[index].local_sum = 0;
-        thread_data_array[index].width = width;
-        rc = pthread_create(&threads[index], NULL, 
-                            get_total, (void *) &thread_data_array[index]);
-        if(rc)
+    else {
+        for (i = 0; i < num_norm_parts, index < num_threads - remaining_parts; 
+            i += normal_dist, index++)
         {
-            printf("Return code from pthread_create() is %d \n", rc);
-            exit(-1);
+            thread_data_array[index].thread_id = index;
+            thread_data_array[index].lbound = l_bound + (width * normal_dist * index);
+            thread_data_array[index].rbound = l_bound + (width * normal_dist * (index + 1));
+            thread_data_array[index].curr_location = l_bound + (width * normal_dist * index);
+            thread_data_array[index].parts = normal_dist;
+            thread_data_array[index].remaining_parts = normal_dist;
+            thread_data_array[index].cond = 0;
+            thread_data_array[index].local_sum = 0;
+            thread_data_array[index].width = width;
+            rc = pthread_create(&threads[index], NULL, 
+                                get_total, (void *) &thread_data_array[index]);
+            if(rc)
+            {
+                printf("Return code from pthread_create() is %d \n", rc);
+                exit(-1);
+            }
+        }
+        for (j = 0; j < num_ext_parts; i += ext_dist, j++, index++)
+        {
+            thread_data_array[index].thread_id = index;
+            thread_data_array[index].lbound = l_bound + (width * ext_dist * index);
+            thread_data_array[index].rbound = l_bound + (width * ext_dist * (index + 1));
+            thread_data_array[index].curr_location = l_bound + (width * normal_dist * index);
+            thread_data_array[index].parts = ext_dist;
+            thread_data_array[index].remaining_parts = ext_dist;
+            thread_data_array[index].cond = 0;
+            thread_data_array[index].local_sum = 0;
+            thread_data_array[index].width = width;
+            rc = pthread_create(&threads[index], NULL, 
+                                get_total, (void *) &thread_data_array[index]);
+            if(rc)
+            {
+                printf("Return code from pthread_create() is %d \n", rc);
+                exit(-1);
+            }
         }
     }
 
