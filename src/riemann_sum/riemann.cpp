@@ -37,7 +37,7 @@ barrier_rc (int rc) {
    Work is done by main() */
 void 
 get_total (struct thread_data * thread_data_array) {
-    double sum = 0;
+    double sum = 0.0;
     for(int i = 0; i < num_threads; i++) {
         sum += thread_data_array[i].local_sum;
     }
@@ -154,6 +154,8 @@ main(int argc, char * argv[])
         thread_data_array[index].parts = normal_dist;
         thread_data_array[index].remaining_parts = normal_dist;
         thread_data_array[index].cond = 0;
+        thread_data_array[index].local_sum = 0;
+        thread_data_array[index].width = width;
         rc = pthread_create(&threads[index], NULL, 
                             get_total, (void *) &thread_data_array[index]);
         if(rc)
@@ -171,6 +173,8 @@ main(int argc, char * argv[])
         thread_data_array[index].parts = ext_dist;
         thread_data_array[index].remaining_parts = ext_dist;
         thread_data_array[index].cond = 0;
+        thread_data_array[index].local_sum = 0;
+        thread_data_array[index].width = width;
         rc = pthread_create(&threads[index], NULL, 
                             get_total, (void *) &thread_data_array[index]);
         if(rc)

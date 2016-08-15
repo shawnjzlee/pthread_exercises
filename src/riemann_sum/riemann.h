@@ -48,8 +48,9 @@ thread_data::~thread_data() {
     pthread_mutex_destroy(&do_work_mutex);
 }
 
-void thread_data::thread_data_init(int _num_threads, bool enable_sharing) {
+void thread_data::thread_data_init(int _num_threads, bool _enable_sharing) {
     num_threads = _num_threads;
+    enable_sharing = _enable_sharing;
     pthread_mutex_init(&do_work_mutex, NULL);
 }
 
@@ -58,7 +59,7 @@ double thread_data::func(double value) {
 }
 
 bool thread_data::get_sharing_condition(thread_data * thread_data_array) {
-    if(enable_sharing) {
+    if(thread_data_array[stolen_index].enable_sharing) {
         for (stolen_index = 0; stolen_index < num_threads; stolen_index++)
         {
             if(stolen_index == thread_id) { continue; }
