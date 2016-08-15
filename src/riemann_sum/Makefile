@@ -36,6 +36,14 @@ check_r:
 		n=`expr $$n + 1`; \
 	done; \
 	true
-	
-check-nosharing:
-	./$(FILE) input.txt ${ARGS} 0
+
+n ?= 1
+check_r-nosharing:
+	n=$(n); \
+	while [ $${n} -le ${ARGS} ] ; do \
+		echo $$n ; \
+		./$(FILE) input.txt $${n} 0; \
+		echo ; \
+		n=`expr $$n + 1`; \
+	done; \
+	true
