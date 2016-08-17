@@ -21,10 +21,12 @@ clean:
 	
 check:
 	./$(FILE) input.txt ${ARGS} 1
+
+check-nosharing:
+	./$(FILE) input.txt ${ARGS} 0
 	
 check_d:
 	gdb --args ./$(FILE) input.txt ${ARGS} 1
-
 
 n ?= 1
 check_r:

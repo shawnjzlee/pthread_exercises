@@ -39,6 +39,8 @@ class thread_data {
         
         bool cond;                          /* Flags the condition of the thread */
         bool enable_sharing;                /* Passed in as cmd line argument; enables/disables sharing */
+        
+        char buffer[200];                   /* Buffer that prevents false sharing on the cache line */
     
 };
 
@@ -72,6 +74,9 @@ bool thread_data::get_sharing_condition(thread_data * thread_data_array) {
                 stolen_parts = thread_data_array[stolen_index].parts;
                 thread_data_array[stolen_index].parts /= 2;
                 stolen_location = thread_data_array[stolen_index].parts;
+                // cout << "parts: " << thread_data_array[stolen_index].parts << endl;
+                // cout << "curr_location: " << thread_data_array[stolen_index].curr_location << endl;
+                // cout << "stolen_location: " << stolen_location << endl;
                 pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);
                 return true;
             }
@@ -98,7 +103,7 @@ void thread_data::callback(thread_data * thread_data_array) {
 
 void thread_data::do_work() {
     double sum = 0.0;
-    double local_lbound = lbound; 
+    double local_lbound = lbound;
     for (int i = 0; i < parts; i++) {
         // if(thread_id == 0) usleep(1);
         pthread_mutex_lock(&do_work_mutex);
