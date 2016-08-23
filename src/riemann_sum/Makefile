@@ -20,20 +20,23 @@ clean:
 	rm -rf $(BUILD_DIR)
 	
 check:
-	./$(FILE) input.txt ${ARGS} 1
+	./$(FILE) input.txt ${ARGS} 0 1
+	
+check-multiplier2:
+	./$(FILE) input.txt ${ARGS} 5 1
 
 check-nosharing:
-	./$(FILE) input.txt ${ARGS} 0
+	./$(FILE) input.txt ${ARGS} 0 0
 	
 check_d:
-	gdb --args ./$(FILE) input.txt ${ARGS} 1
+	gdb --args ./$(FILE) input.txt ${ARGS} 0 1
 
 n ?= 1
 check_r:
 	n=$(n); \
 	while [ $${n} -le ${ARGS} ] ; do \
 		echo $$n ; \
-		./$(FILE) input.txt $${n} 1; \
+		./$(FILE) input.txt $${n} 0 1; \
 		echo ; \
 		n=`expr $$n + 1`; \
 	done; \
@@ -44,7 +47,7 @@ check_r-nosharing:
 	n=$(n); \
 	while [ $${n} -le ${ARGS} ] ; do \
 		echo $$n ; \
-		./$(FILE) input.txt $${n} 0; \
+		./$(FILE) input.txt $${n} 0 0; \
 		echo ; \
 		n=`expr $$n + 1`; \
 	done; \
