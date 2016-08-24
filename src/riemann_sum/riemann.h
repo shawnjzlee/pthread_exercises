@@ -1,6 +1,9 @@
 #ifndef RIEMANN_H
 #define RIEMANN_H
 
+#include <chrono>
+using namespace std::chrono;
+
 #include <unistd.h>
 #include "rbarrier.h"
 
@@ -74,9 +77,6 @@ bool thread_data::get_sharing_condition(thread_data * thread_data_array) {
                 stolen_parts = thread_data_array[stolen_index].parts;
                 thread_data_array[stolen_index].parts /= 2;
                 stolen_location = thread_data_array[stolen_index].parts;
-                // cout << "parts: " << thread_data_array[stolen_index].parts << endl;
-                // cout << "curr_location: " << thread_data_array[stolen_index].curr_location << endl;
-                // cout << "stolen_location: " << stolen_location << endl;
                 pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);
                 return true;
             }
@@ -89,15 +89,13 @@ bool thread_data::get_sharing_condition(thread_data * thread_data_array) {
 
 void thread_data::callback(thread_data * thread_data_array) {
     double sum = 0.0;
-    double local_lbound = thread_data_array[stolen_index].lbound + stolen_location * width; 
+    double local_lbound = thread_data_array[stolen_index].lbound + stolen_location * width;
     while(stolen_location != stolen_parts) {
-        pthread_mutex_lock(&thread_data_array[stolen_index].do_work_mutex);
         thread_data_array[stolen_index].remaining_parts--;
         sum += func(local_lbound) * width;
-        thread_data_array[stolen_index].local_sum += func(local_lbound) * width;
+        thread_data_array[thread_id].local_sum += func(local_lbound) * width;
         local_lbound += width;
         stolen_location += 1;
-        pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);
     }
 }
 

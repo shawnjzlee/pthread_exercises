@@ -22,8 +22,8 @@ clean:
 check:
 	./$(FILE) input.txt ${ARGS} 0 1
 	
-check-multiplier2:
-	./$(FILE) input.txt ${ARGS} 5 1
+check-multiplier:
+	./$(FILE) input.txt ${ARGS1} ${ARGS2} 1
 
 check-nosharing:
 	./$(FILE) input.txt ${ARGS} 0 0
