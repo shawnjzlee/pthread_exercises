@@ -157,18 +157,12 @@ main(int argc, char * argv[])
     int num_norm_parts = part_sz - remaining_parts;
     int num_ext_parts = part_sz - num_norm_parts;
     
-    // OUTPUT(l_bound); OUTPUT(r_bound); OUTPUT(normal_dist); OUTPUT(ext_dist);
-    // OUTPUT(init_dist);
-    // OUTPUT(num_norm_parts); OUTPUT(num_ext_parts); OUTPUT(width);
-    // OUTPUT (width * (double)normal_dist);
-    
     if(num_threads == 1) {
         thread_data_array[index].thread_id = index;
         thread_data_array[index].lbound = l_bound + (width * normal_dist * index);
         thread_data_array[index].rbound = l_bound + (width * normal_dist * (index + 1));
         thread_data_array[index].curr_location = l_bound + (width * normal_dist * index);
         thread_data_array[index].parts = normal_dist;
-        thread_data_array[index].remaining_parts = normal_dist;
         thread_data_array[index].cond = 0;
         thread_data_array[index].local_sum = 0;
         thread_data_array[index].width = width;
@@ -192,7 +186,6 @@ main(int argc, char * argv[])
                 thread_data_array[index].rbound = l_bound + (width * init_dist * (index + 1));
                 thread_data_array[index].curr_location = l_bound + (width * init_dist * index);
                 thread_data_array[index].parts = init_dist;
-                thread_data_array[index].remaining_parts = init_dist;
                 i += init_dist;
             }
             else if (multiplier) {
@@ -200,7 +193,6 @@ main(int argc, char * argv[])
                 thread_data_array[index].rbound = l_bound + (width * normal_dist * (index + 1)) + (width * (init_dist - normal_dist));
                 thread_data_array[index].curr_location = l_bound + (width * normal_dist * index) + (width * (init_dist - normal_dist));
                 thread_data_array[index].parts = normal_dist;
-                thread_data_array[index].remaining_parts = normal_dist;
                 i += normal_dist;
             }
             else {
@@ -208,7 +200,6 @@ main(int argc, char * argv[])
                 thread_data_array[index].rbound = l_bound + (width * normal_dist * (index + 1));
                 thread_data_array[index].curr_location = l_bound + (width * normal_dist * index);
                 thread_data_array[index].parts = normal_dist;
-                thread_data_array[index].remaining_parts = normal_dist;
                 i += normal_dist;
             }
             thread_data_array[index].cond = 0;
@@ -229,7 +220,6 @@ main(int argc, char * argv[])
             thread_data_array[index].rbound = l_bound + (width * ext_dist * (index + 1)) + (width * (init_dist - normal_dist));
             thread_data_array[index].curr_location = l_bound + (width * normal_dist * index) + (width * (init_dist - normal_dist));
             thread_data_array[index].parts = ext_dist;
-            thread_data_array[index].remaining_parts = ext_dist;
             thread_data_array[index].cond = 0;
             thread_data_array[index].local_sum = 0;
             thread_data_array[index].width = width;

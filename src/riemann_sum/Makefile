@@ -27,6 +27,9 @@ check-multiplier:
 
 check-nosharing:
 	./$(FILE) input.txt ${ARGS} 0 0
+
+check-multiplier-nosharing:
+	./$(FILE) input.txt ${ARGS1} ${ARGS2} 0
 	
 check_d:
 	gdb --args ./$(FILE) input.txt ${ARGS} 0 1
