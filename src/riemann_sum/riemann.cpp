@@ -148,7 +148,7 @@ main(int argc, char * argv[])
     if (part_sz  % (num_threads + multiplier))
         remaining_parts = part_sz  % (num_threads - 1);
  
-    if (multiplier == 0) normal_dist = part_sz / num_threads;
+    if (multiplier == 0 || num_threads == 1) normal_dist = part_sz / num_threads;
     else {
         init_dist = multiplier * (part_sz / (num_threads + multiplier));
         normal_dist = (part_sz - init_dist) / (num_threads - 1);
