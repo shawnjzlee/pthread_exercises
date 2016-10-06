@@ -77,6 +77,7 @@ bool thread_data::get_sharing_condition(thread_data * thread_data_array) {
                 thread_data_array[stolen_index].parts /= 2;
                 stolen_location = thread_data_array[stolen_index].parts;
                 pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);
+                cout << "Thread " << thread_id << " is stealing from " << stolen_index << endl;
                 return true;
             }
             pthread_mutex_unlock(&thread_data_array[stolen_index].do_work_mutex);

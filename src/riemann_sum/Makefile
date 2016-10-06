@@ -71,7 +71,7 @@ check_r-multiplier-nosharing:
 	n=$(n); \
 	while [ $${n} -le ${ARGS1} ] ; do \
 		echo $$n ; \
-		./$(EXECUTABLE) input.txt $${n} ${ARGS2} 0; \
+		./$(FILE) input.txt $${n} ${ARGS2} 0; \
 		echo ; \
 		n=`expr $$n + 1`; \
 	done; \
